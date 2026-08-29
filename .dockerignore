@@ -1,0 +1,9 @@
+.git
+.github
+.agents
+.codex
+node_modules
+dist
+dist-ssr
+*.log
+*.local
