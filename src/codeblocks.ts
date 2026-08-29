@@ -463,8 +463,8 @@ function logStatus(event: EditorStatus): void {
     console.info("[CodeBlocks] Monaco loaded");
   } else if (event.type === "clangd-downloading") {
     const progress = event.total
-      ? `${Math.round((event.loaded / event.total) * 100)}%`
-      : `${event.loaded} bytes`;
+      ? `${formatMegabytes(event.loaded)} MB / ${formatMegabytes(event.total)} MB`
+      : `${formatMegabytes(event.loaded)} MB downloaded`;
     console.info(`[CodeBlocks] clangd downloading: ${progress}`);
   } else if (event.type === "clangd-starting") {
     console.info("[CodeBlocks] clangd starting");
@@ -475,6 +475,10 @@ function logStatus(event: EditorStatus): void {
   } else if (event.type === "clangd-error") {
     console.error(`[CodeBlocks] clangd error: ${event.error.message}`, event.error);
   }
+}
+
+function formatMegabytes(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
 }
 
 interface CompilerLine { text: string }

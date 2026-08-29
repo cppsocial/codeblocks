@@ -167,6 +167,9 @@ test("code help works under the opt-in isolation service worker", async ({ page 
   expect(errors).toEqual([]);
   expect(messages).toEqual(expect.arrayContaining([
     expect.stringContaining("[CodeBlocks] Monaco loaded"),
+    expect.stringMatching(
+      /\[CodeBlocks\] clangd downloading: \d+\.\d MB \/ \d+\.\d MB/,
+    ),
     expect.stringContaining("[CodeBlocks] clangd starting"),
     expect.stringContaining("[CodeBlocks] clangd loaded"),
     expect.stringContaining("[CodeBlocks] clangd activated"),
