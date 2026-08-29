@@ -9,10 +9,7 @@ const initialFallbackHost = document.querySelector("[data-fallback]");
 const initialTextarea = initialFallbackHost.querySelector("textarea");
 
 const params = new URLSearchParams(location.search);
-const editorUrl = params.get("runtime") ??
-  (location.port === "4175"
-    ? "/assets/clangd/editor.js"
-    : `http://localhost:4174/editor.js${params.get("delay") ? `?delay=${params.get("delay")}` : ""}`);
+const editorUrl = params.get("runtime") ?? "./editor.js";
 const runtimeBase = new URL(".", new URL(editorUrl, location.href));
 const editorModulePromise = import(editorUrl);
 const fallbackModulePromise = import(new URL("fallback.js", runtimeBase));
@@ -138,7 +135,11 @@ try {
       }
       if (event.type === "clangd-starting") status.textContent = "Starting clangd...";
       if (event.type === "clangd-ready") status.textContent = "Monaco + clangd ready";
-      if (event.type === "clangd-error") status.textContent = "Monaco ready - clangd unavailable";
+      if (event.type === "clangd-error"){ 
+        status.textContent = "Monaco ready - clangd unavailable";
+        console.error(event);
+      }
+      
     },
   });
 

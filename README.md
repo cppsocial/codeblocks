@@ -96,8 +96,6 @@ The renderer creates text nodes and styled spans rather than injecting HTML. The
 
 Status events have a `type` of `monaco-loading`, `monaco-ready`, `clangd-downloading`, `clangd-starting`, `clangd-ready`, or `clangd-error`. Download events also contain `loaded` and, when the server provides it, `total` bytes.
 
-See [demo/index.html](demo/index.html), [demo/demo.js](demo/demo.js), and [demo/demo.css](demo/demo.css) for a complete framework-free highlighted fallback editor, seamless handoff, ANSI-aware Run output, and Compiler Explorer link. The demo's **Show fallback / Show Monaco** toggle recreates the fallback on demand for visual comparison; the normal one-way startup handoff still removes and cleans up the fallback.
-
 ## Headers
 
 The host document must be cross-origin isolated for clangd's SharedArrayBuffer/pthread build:
@@ -160,29 +158,6 @@ Install an existing artifact directory or archive with:
 ```
 
 The input must contain `clangd.js`, `clangd.wasm`, and any other `clangd*` files produced by Emscripten. `build.sh` remains a separate manual reference workflow and is not invoked by `pnpm build` or CI.
-
-## Cross-origin demo and tests
-
-Build first, then start all acceptance origins:
-
-```bash
-pnpm build
-pnpm demo:origins
-```
-
-- `http://localhost:4173` serves the demo host with COOP/COEP.
-- `http://localhost:4174` serves runtime assets with CORS/CORP.
-- `http://localhost:4175` serves the same runtime at `/assets/clangd/` for same-origin testing.
-- `http://localhost:4176` serves a non-isolated host for graceful-degradation testing.
-
-Run the Chromium acceptance suite with:
-
-```bash
-pnpm exec playwright install chromium
-pnpm test:browser
-```
-
-The tests cover immediate fallback editing and Run, delayed runtime/WASM, edit-preserving handoff, DOM ownership, cross-origin isolation and worker startup, real clangd diagnostics, failure behavior, and same-origin extraction layout.
 
 ## Compiler Explorer Run UI
 
