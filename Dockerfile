@@ -26,7 +26,7 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 COPY --chown=node:node . .
 
 ENV NODE_ENV=development
-EXPOSE 5173
+EXPOSE 4173 4174 4175 4176
 
 USER node
 CMD ["pnpm", "dev", "--host", "0.0.0.0"]

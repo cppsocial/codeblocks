@@ -1,0 +1,6 @@
+/*
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+/wasm/*.wasm
+  Content-Type: application/wasm

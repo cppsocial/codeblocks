@@ -1,0 +1,68 @@
+.clangd-browser-fallback {
+  --clangd-fallback-bg: #1f1f1f;
+  --clangd-fallback-fg: #d4d4d4;
+  --clangd-fallback-gutter: 31px;
+  --clangd-fallback-pad-y: 16px;
+  --clangd-fallback-font: 14px/23px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  background: var(--clangd-fallback-bg);
+  color: var(--clangd-fallback-fg);
+  font: var(--clangd-fallback-font);
+}
+.clangd-fallback-lines {
+  position: absolute;
+  z-index: 2;
+  top: var(--clangd-fallback-pad-y);
+  left: 0;
+  width: var(--clangd-fallback-gutter);
+  padding-right: 6px;
+  color: #858585;
+  text-align: right;
+  white-space: pre;
+  user-select: none;
+  will-change: transform;
+}
+.clangd-fallback-highlight,
+.clangd-browser-fallback textarea {
+  position: absolute;
+  inset: 0 0 0 var(--clangd-fallback-gutter);
+  width: calc(100% - var(--clangd-fallback-gutter));
+  height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  border: 0;
+  padding: var(--clangd-fallback-pad-y) 12px var(--clangd-fallback-pad-y) 0;
+  overflow: auto;
+  tab-size: 4;
+  white-space: pre;
+  font: var(--clangd-fallback-font);
+}
+.clangd-fallback-highlight {
+  color: var(--clangd-fallback-fg);
+  pointer-events: none;
+  will-change: transform;
+}
+.clangd-fallback-highlight code { font: inherit; }
+.clangd-browser-fallback textarea {
+  z-index: 1;
+  resize: none;
+  outline: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: #aeafad;
+  -webkit-text-fill-color: transparent;
+}
+.clangd-browser-fallback textarea::selection {
+  background: #264f78;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.clangd-token-comment { color: #6a9955; }
+.clangd-token-string { color: #ce9178; }
+.clangd-token-preprocessor { color: #c586c0; }
+.clangd-token-keyword { color: #569cd6; }
+.clangd-token-type { color: #4ec9b0; }
+.clangd-token-number { color: #b5cea8; }
+.clangd-token-punctuation { color: #ffd700; }

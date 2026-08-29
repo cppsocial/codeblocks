@@ -26,12 +26,6 @@ importers:
       '@codingame/monaco-vscode-theme-service-override':
         specifier: ~8.0.4
         version: 8.0.4
-      ansi_up:
-        specifier: ^6.0.2
-        version: 6.0.2
-      iframe-resizer:
-        specifier: ^4.3.9
-        version: 4.3.9
       monaco-editor:
         specifier: npm:@codingame/monaco-vscode-editor-api@~8.0.4
         version: '@codingame/monaco-vscode-editor-api@8.0.4'
@@ -48,6 +42,9 @@ importers:
         specifier: ~9.0.1
         version: 9.0.1
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.55.0
+        version: 1.62.1
       '@types/emscripten':
         specifier: ^1.39.10
         version: 1.39.10
@@ -309,6 +306,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@playwright/test@1.62.1':
+    resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   '@rollup/rollup-android-arm-eabi@4.22.5':
     resolution: {integrity: sha512-SU5cvamg0Eyu/F+kLeMXS7GoahL+OoizlclVFX3l5Ql6yNlywJJ0OuqTzUx0v+aHhPHEB/56CT06GQrRrGNYww==}
     cpu: [arm]
@@ -404,9 +406,6 @@ packages:
   '@vscode/iconv-lite-umd@0.7.0':
     resolution: {integrity: sha512-bRRFxLfg5dtAyl5XyiVWz/ZBPahpOpPrNYnnHpOpUZvam4tKH35wdhP4Kj6PbM0+KdliOsPzbGWpkxcdpNB/sg==}
 
-  ansi_up@6.0.2:
-    resolution: {integrity: sha512-3G3vKvl1ilEp7J1u6BmULpMA0xVoW/f4Ekqhl8RTrJrhEBkonKn5k3bUc5Xt+qDayA6iDX0jyUh3AbZjB/l0tw==}
-
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -431,14 +430,15 @@ packages:
     engines: {node: '>=12'}
     hasBin: true
 
+  fsevents@2.3.2:
+    resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
-
-  iframe-resizer@4.3.9:
-    resolution: {integrity: sha512-MCt+V/THB4a9OcAdrWo5NsI2CRpeMM4ijhTfiLtsdgDJXWYXf62Ve8yO8rKGmYNs991zty/EolYOxActlkfU+A==}
-    engines: {node: '>=0.8.0'}
 
   import-meta-resolve@4.1.0:
     resolution: {integrity: sha512-I6fiaX09Xivtk+THaMfAwnA3MVA5Big1WHF1Dfx9hFuvNIWpXnorlkzhcQf6ehrqQiiZECRt1poOAkPmer3ruw==}
@@ -457,6 +457,7 @@ packages:
 
   monaco-editor-wrapper@5.5.3:
     resolution: {integrity: sha512-ceC+HnpUw/WehfH9uL7Y5j1m/46hQFcS/Z1VYpiFl+pieNf4/JfOWrzLEDqnxOK/qrPJ2fR6JB78mfZNLtPeQQ==}
+    deprecated: The development of monaco-wrapper-editor will not be continued. Please use https://www.npmjs.com/package/monaco-languageclient v10+ from now on.
     peerDependencies:
       monaco-editor: npm:@codingame/monaco-vscode-editor-api@~8.0.4
       monaco-languageclient: ~8.8.3
@@ -485,6 +486,16 @@ packages:
 
   picocolors@1.1.0:
     resolution: {integrity: sha512-TQ92mBOW0l3LeMeyLV6mzy/kWr8lkd/hp3mTg7wYK7zJhuBStmGMBG0BdeDZS/dZx1IukaX6Bk11zcln25o1Aw==}
+
+  playwright-core@1.62.1:
+    resolution: {integrity: sha512-wPYSwEBJY9GHraISXqyqtx0na0LpO3XEX7jNDhntbex7tzUS7kLnZsOlFruFJB4Hi/rhDMjXGqHewDZ68nYZVw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.62.1:
+    resolution: {integrity: sha512-0M+L3LAD8/nm554LOla9Ayx0j0tmFZ0FBcoQ7F1VuVHpM/XpiC8RcDzBQB8W5+hA8L22THxELzeF+2WcUzvcLg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   postcss@8.4.47:
     resolution: {integrity: sha512-56rxCq7G/XfB4EkXq9Egn5GCqugWvDFjafDOThIdMBsI15iqPqR5r15TfSr1YPYeEI19YeaXMCbY6u88Y76GLQ==}
@@ -806,6 +817,10 @@ snapshots:
   '@esbuild/win32-x64@0.21.5':
     optional: true
 
+  '@playwright/test@1.62.1':
+    dependencies:
+      playwright: 1.62.1
+
   '@rollup/rollup-android-arm-eabi@4.22.5':
     optional: true
 
@@ -866,8 +881,6 @@ snapshots:
 
   '@vscode/iconv-lite-umd@0.7.0': {}
 
-  ansi_up@6.0.2: {}
-
   balanced-match@1.0.2: {}
 
   brace-expansion@2.0.1:
@@ -906,10 +919,11 @@ snapshots:
       '@esbuild/win32-ia32': 0.21.5
       '@esbuild/win32-x64': 0.21.5
 
-  fsevents@2.3.3:
+  fsevents@2.3.2:
     optional: true
 
-  iframe-resizer@4.3.9: {}
+  fsevents@2.3.3:
+    optional: true
 
   import-meta-resolve@4.1.0: {}
 
@@ -971,6 +985,14 @@ snapshots:
   picocolors@1.0.0: {}
 
   picocolors@1.1.0: {}
+
+  playwright-core@1.62.1: {}
+
+  playwright@1.62.1:
+    dependencies:
+      playwright-core: 1.62.1
+    optionalDependencies:
+      fsevents: 2.3.2
 
   postcss@8.4.47:
     dependencies:

@@ -5,17 +5,18 @@
   "type": "module",
   "scripts": {
     "clean": "vite-node --config ./scripts/vite.node.ts ./scripts/clean.ts",
-    "dev": "vite",
-    "dev:debug": "vite --debug --force",
+    "dev": "pnpm build && pnpm demo:origins",
     "watch": "tsc -w",
-    "build": "pnpm run clean && tsc && vite build",
-    "build:watch": "pnpm run clean && tsc && vite build --watch",
-    "preview": "vite preview"
+    "build": "pnpm run clean && tsc && vite build && node scripts/copy-runtime-assets.mjs",
+    "pack:runtime": "pnpm build && bash scripts/package-runtime.sh",
+    "demo:origins": "node scripts/serve-demo.mjs",
+    "test:browser": "playwright test"
   },
   "devDependencies": {
     "@types/emscripten": "^1.39.10",
     "@types/node": "~20.12.12",
     "@types/vscode": "~1.89.0",
+    "@playwright/test": "^1.55.0",
     "typescript": "^5.4.5",
     "vite": "^5.4.8",
     "vite-node": "~1.6.0"
@@ -26,8 +27,6 @@
     "@codingame/monaco-vscode-cpp-default-extension": "~8.0.4",
     "@codingame/monaco-vscode-textmate-service-override": "~8.0.4",
     "@codingame/monaco-vscode-theme-service-override": "~8.0.4",
-    "ansi_up": "^6.0.2",
-    "iframe-resizer": "^4.3.9",
     "monaco-editor": "npm:@codingame/monaco-vscode-editor-api@~8.0.4",
     "monaco-editor-wrapper": "~5.5.3",
     "monaco-languageclient": "~8.8.3",

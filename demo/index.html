@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>clangd browser runtime demo</title>
+    <link rel="stylesheet" href="./demo.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">C++ - Monaco - clangd</p>
+      <h1>Edit and run C++ in the browser</h1>
+      <p class="intro">The native editor is ready now. Monaco and clangd upgrade it in the background.</p>
+
+      <section class="cpp-demo" aria-label="C++ editor demo">
+        <div class="editor-shell">
+          <div class="fallback-host clangd-browser-fallback" data-fallback>
+            <div class="clangd-fallback-lines" aria-hidden="true">1<br>2<br>3<br>4<br>5<br>6<br>7</div>
+            <pre class="clangd-fallback-highlight" aria-hidden="true"><code>#include &lt;iostream&gt;
+
+int main() {
+    std::cout &lt;&lt; "Hello from the browser!\n";
+    return 0;
+}
+</code></pre>
+            <textarea aria-label="C++ source code" spellcheck="false">#include &lt;iostream&gt;
+
+int main() {
+    std::cout &lt;&lt; "Hello from the browser!\n";
+    return 0;
+}
+</textarea>
+          </div>
+          <div class="monaco-host" data-monaco-host aria-label="Monaco C++ editor"></div>
+        </div>
+
+        <div class="toolbar">
+          <button type="button" data-run>Run</button>
+          <button type="button" class="secondary" data-editor-toggle disabled>Loading Monaco...</button>
+          <a href="https://compiler-explorer.com/" target="_blank" rel="noopener">Open in Compiler Explorer (new tab)</a>
+          <span class="status" data-status>Native editor ready</span>
+        </div>
+
+        <section class="output-drawer" data-output-drawer hidden aria-live="polite">
+          <header>Compiler output</header>
+          <pre data-output></pre>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="./demo.js"></script>
+  </body>
+</html>
