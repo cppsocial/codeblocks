@@ -6,6 +6,7 @@ export type EditorStatus =
   | { type: "monaco-ready" }
   | { type: "clangd-downloading"; loaded: number; total?: number }
   | { type: "clangd-starting" }
+  | { type: "clangd-loaded" }
   | { type: "clangd-ready" }
   | { type: "clangd-error"; error: Error };
 
@@ -62,6 +63,7 @@ export function startClangd(report: StatusReporter): ClangdWorkerHandle {
       case "ready":
         if (!settled) {
           settled = true;
+          report({ type: "clangd-loaded" });
           resolveReady();
         }
         break;

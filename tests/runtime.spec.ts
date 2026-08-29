@@ -8,7 +8,7 @@ test("the example uses one public script and stylesheet and shows debug controls
   await expect(page.locator(".codeblocks-debug")).toBeVisible();
   await expect(page.locator("[data-theme-toggle]")).toBeVisible();
   await expect(page.locator("[data-editor-toggle]")).toBeVisible();
-  await expect(page.locator("[data-status]")).toBeHidden();
+  await expect(page.locator("[data-status]")).toHaveCount(0);
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
   expect(await page.locator('link[rel="stylesheet"][href]').count()).toBe(1);
   expect(await page.locator('script[src]').count()).toBe(1);
@@ -150,7 +150,9 @@ test("the main API exposes Monaco options, styling, and the editor instance", as
 
 test("code help works under the opt-in isolation service worker", async ({ page }) => {
   const errors: string[] = [];
+  const messages: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => messages.push(message.text()));
   await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
   await expect(page.locator("codeblock")).toHaveClass(/codeblocks-root/);
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
@@ -163,6 +165,12 @@ test("code help works under the opt-in isolation service worker", async ({ page 
   });
   await expect(page.locator(".squiggly-error").first()).toBeVisible({ timeout: 30_000 });
   expect(errors).toEqual([]);
+  expect(messages).toEqual(expect.arrayContaining([
+    expect.stringContaining("[CodeBlocks] Monaco loaded"),
+    expect.stringContaining("[CodeBlocks] clangd starting"),
+    expect.stringContaining("[CodeBlocks] clangd loaded"),
+    expect.stringContaining("[CodeBlocks] clangd activated"),
+  ]));
 });
 
 test("overflow widgets are not clipped by the code block", async ({ page }) => {

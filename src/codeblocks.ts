@@ -9,7 +9,6 @@ export type CodeBlockTheme = "auto" | "light" | "dark";
 export interface CodeBlocksConfiguration {
   theme?: CodeBlockTheme;
   showDebugControls?: boolean;
-  showStatus?: boolean;
   compiler?: string;
   args?: string;
   compilerExplorerUrl?: string;
@@ -116,12 +115,7 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   compilerLink.target = "_blank";
   compilerLink.rel = "noopener";
   compilerLink.textContent = "Open in Compiler Explorer";
-  const status = document.createElement("span");
-  status.className = "codeblocks-status";
-  status.dataset.status = "";
-  status.hidden = !options.showStatus;
-  status.textContent = "Code editor ready";
-  toolbar.append(runButton, debugControls, compilerLink, status);
+  toolbar.append(runButton, debugControls, compilerLink);
 
   const outputDrawer = document.createElement("section");
   outputDrawer.className = "codeblocks-output";
@@ -160,6 +154,7 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   let editor: CppEditor | undefined;
   let activeEditor: Pick<CppEditor, "getValue" | "setValue" | "focus"> = fallback;
   let disposed = false;
+  let lastLoggedDownload = -1;
   const changeListeners = new Set<(value: string) => void>();
   let unsubscribeActive = fallback.onDidChange(notifyChange);
 
@@ -185,8 +180,9 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   const editorReady = upgradeEditor();
   const monacoReady = editorReady.then((created) => created.getMonacoEditor());
   void editorReady.catch((error: unknown) => {
-    status.textContent = "Basic editor ready";
-    status.title = `Code help is unavailable: ${errorMessage(error)}`;
+    if (options.showDebugControls) {
+      console.error("[CodeBlocks] Editor failed", error);
+    }
     rejectClangd(error);
   });
 
@@ -216,26 +212,25 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
     activeEditor = created;
     subscribeToActive(created);
     editorToggle.disabled = false;
-    status.textContent = "Code editor ready";
     created.clangdReady.then(resolveClangd, rejectClangd);
     return created;
   }
 
   function reportStatus(event: EditorStatus): void {
-    options.onStatus?.(event);
-    if (event.type === "clangd-downloading") {
-      const percent = event.total
-        ? ` ${Math.round((event.loaded / event.total) * 100)}%`
-        : "";
-      status.textContent = `Preparing code help${percent}`;
-    } else if (event.type === "clangd-starting") {
-      status.textContent = "Preparing code help";
-    } else if (event.type === "clangd-ready") {
-      status.textContent = "Code help ready";
-    } else if (event.type === "clangd-error") {
-      status.textContent = "Code editor ready";
-      status.title = `Code help is unavailable: ${event.error.message}`;
+    if (options.showDebugControls) {
+      if (event.type !== "clangd-downloading") {
+        logStatus(event);
+      } else {
+        const milestone = event.total
+          ? Math.floor((event.loaded / event.total) * 10) * 10
+          : Math.floor(event.loaded / (5 * 1024 * 1024));
+        if (milestone !== lastLoggedDownload) {
+          lastLoggedDownload = milestone;
+          logStatus(event);
+        }
+      }
     }
+    options.onStatus?.(event);
   }
 
   async function run(): Promise<void> {
@@ -400,7 +395,6 @@ function upgradeWithin(root: ParentNode): void {
       element,
       theme: attributeTheme(element) ?? configuration.theme,
       showDebugControls: element.hasAttribute("debug") || configuration.showDebugControls,
-      showStatus: element.hasAttribute("status") || configuration.showStatus,
       compiler: element.getAttribute("compiler") ?? configuration.compiler,
       args: element.getAttribute("args") ?? configuration.args,
     });
@@ -460,6 +454,27 @@ function afterPaint(): Promise<void> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function logStatus(event: EditorStatus): void {
+  if (event.type === "monaco-loading") {
+    console.info("[CodeBlocks] Monaco loading");
+  } else if (event.type === "monaco-ready") {
+    console.info("[CodeBlocks] Monaco loaded");
+  } else if (event.type === "clangd-downloading") {
+    const progress = event.total
+      ? `${Math.round((event.loaded / event.total) * 100)}%`
+      : `${event.loaded} bytes`;
+    console.info(`[CodeBlocks] clangd downloading: ${progress}`);
+  } else if (event.type === "clangd-starting") {
+    console.info("[CodeBlocks] clangd starting");
+  } else if (event.type === "clangd-loaded") {
+    console.info("[CodeBlocks] clangd loaded");
+  } else if (event.type === "clangd-ready") {
+    console.info("[CodeBlocks] clangd activated");
+  } else if (event.type === "clangd-error") {
+    console.error(`[CodeBlocks] clangd error: ${event.error.message}`, event.error);
+  }
 }
 
 interface CompilerLine { text: string }

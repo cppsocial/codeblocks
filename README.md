@@ -43,7 +43,6 @@ Supported attributes are:
 - `args`: arguments sent unchanged to Compiler Explorer.
 - `theme`: `auto`, `light`, or `dark`.
 - `debug`: show the basic/full editor and light/dark switches. These are hidden by default.
-- `status`: show the optional user-facing code-help status.
 - `width`: any valid CSS width for the complete block.
 - `height`: any valid CSS height for the editor area, such as `280px`, `40vh`, or `clamp(240px, 50vh, 600px)`.
 - `min-height`: any valid CSS minimum height for the editor area.
@@ -74,7 +73,7 @@ Supported attributes are:
 </script>
 ```
 
-Call `CodeBlocks.configure(options)` before a block is upgraded to set defaults for later blocks. The available options are `theme`, `showDebugControls`, `showStatus`, `compiler`, `args`, `compilerExplorerUrl`, `editorOptions`, `styles`, and `onStatus`.
+Call `CodeBlocks.configure(options)` before a block is upgraded to set defaults for later blocks. The available options are `theme`, `showDebugControls`, `compiler`, `args`, `compilerExplorerUrl`, `editorOptions`, `styles`, and `onStatus`.
 
 `CodeBlocks.get(element)` returns the upgraded block instance. It exposes `getValue`, `setValue`, `getTabs`, `selectTab`, `focus`, `run`, `setTheme`, `dispose`, `onDidChange`, `editorReady`, `monacoReady`, and `clangdReady`. `getValue` and `setValue` act on the active tab. `monacoReady` resolves to the underlying Monaco standalone editor for integrations that need the native editor API.
 
@@ -92,6 +91,16 @@ codeblock {
 ```
 
 The editor observes its container and relayouts whenever its width or height changes, including flexbox, grid, responsive, and script-driven resizing.
+
+Debug mode also writes lifecycle messages to the browser console, including Monaco loading/loaded, clangd download progress, clangd starting/loaded/activated, and complete clangd error messages. Add `data-debug` to the loader script to include loader, HTTPS, service-worker, and isolation messages:
+
+```html
+<script
+  src="./codeblocks.js"
+  data-coi-serviceworker="./coi-serviceworker.js"
+  data-debug
+></script>
+```
 
 The lower-level ES module entries remain available as `editor.js`, `fallback.js`, and `ansi.js`.
 
@@ -114,6 +123,8 @@ The reusable loader does not register a service worker by default. Hosts such as
 ```
 
 That opt-in registers a host-owned service worker and reloads once. Do not use the attribute when the server already sends the headers.
+
+WebAssembly threads, service workers, and cross-origin isolation require a secure context. Enable "Enforce HTTPS" for a GitHub Pages custom domain. When the isolation helper is enabled, the loader also redirects non-local HTTP pages to the same HTTPS URL as a fallback. The included `clangd.cpp.social` example redirects before loading its external CSS or JavaScript.
 
 If assets are hosted on another origin, that origin must allow CORS and send `Cross-Origin-Resource-Policy: cross-origin` or an equivalent policy accepted by the embedding page.
 

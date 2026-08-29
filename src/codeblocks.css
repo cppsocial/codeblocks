@@ -136,13 +136,6 @@ codeblock,
 .codeblocks-root a:hover { text-decoration: underline; }
 .codeblocks-debug { display: inline-flex; gap: 8px; }
 .codeblocks-debug[hidden] { display: none; }
-.codeblocks-status {
-  margin-left: auto;
-  color: var(--codeblocks-muted);
-  font-size: 12px;
-}
-.codeblocks-status[hidden] { display: none; }
-
 .codeblocks-output {
   border-top: 1px solid var(--codeblocks-border);
   background: var(--codeblocks-output-background);
@@ -175,5 +168,4 @@ codeblock,
 
 @media (max-width: 640px) {
   .codeblocks-editor-shell { height: var(--codeblocks-editor-height-mobile); }
-  .codeblocks-status { flex-basis: 100%; margin-left: 0; }
 }
