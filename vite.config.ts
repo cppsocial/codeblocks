@@ -12,16 +12,17 @@ export default defineConfig({
         editor: "src/runtime.ts",
         fallback: "src/fallback.ts",
         ansi: "src/ansi.ts",
+        "codeblocks-module": "src/codeblocks.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
-      cssFileName: "editor",
+      cssFileName: "codeblocks",
     },
     rollupOptions: {
       output: {
         assetFileNames: (asset) =>
           asset.name?.endsWith(".css")
-            ? "editor.css"
+            ? "codeblocks.css"
             : "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
       },

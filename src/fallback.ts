@@ -14,7 +14,43 @@ export interface CppFallbackEditor {
   onDidChange(callback: (value: string) => void): () => void;
 }
 
-const TOKEN_PATTERN = /(^[ \t]*#[^\n]*|\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:alignas|alignof|asm|auto|break|case|catch|class|concept|const|consteval|constexpr|constinit|continue|co_await|co_return|co_yield|decltype|default|delete|do|else|enum|explicit|export|extern|for|friend|goto|if|inline|namespace|new|noexcept|nullptr|operator|private|protected|public|requires|return|sizeof|static|static_assert|struct|switch|template|this|throw|try|typedef|typeid|typename|union|using|virtual|volatile|while)\b|\b(?:bool|char|char8_t|char16_t|char32_t|double|float|int|long|short|signed|unsigned|void|wchar_t|string|std)\b|\b(?:0[xX][\da-fA-F']+|\d[\d']*(?:\.\d[\d']*)?)\b)/gm;
+const KEYWORDS = [
+  "alignas", "alignof", "asm", "auto", "break", "case", "catch", "class",
+  "concept", "const", "consteval", "constexpr", "constinit", "continue",
+  "co_await", "co_return", "co_yield", "decltype", "default", "delete", "do",
+  "else", "enum", "explicit", "export", "extern", "for", "friend", "goto", "if",
+  "inline", "namespace", "new", "noexcept", "nullptr", "operator", "private",
+  "protected", "public", "requires", "return", "sizeof", "static", "static_assert",
+  "struct", "switch", "template", "this", "throw", "try", "typedef", "typeid",
+  "typename", "union", "using", "virtual", "volatile", "while",
+];
+
+const BUILTIN_TYPES = [
+  "bool", "char", "char8_t", "char16_t", "char32_t", "double", "float", "int",
+  "long", "short", "signed", "unsigned", "void", "wchar_t",
+];
+
+const TOKEN_CLASSES = {
+  preprocessor: "clangd-token-preprocessor",
+  header: "clangd-token-header",
+  comment: "clangd-token-comment",
+  string: "clangd-token-string",
+  keyword: "clangd-token-keyword",
+  type: "clangd-token-type",
+  namespace: "clangd-token-namespace",
+  number: "clangd-token-number",
+} as const;
+
+const TOKEN_PATTERN = new RegExp([
+  "(?<preprocessor>^[ \\t]*#[ \\t]*[A-Za-z_]\\w*)",
+  "(?<header><[^>\\n]+>)",
+  "(?<comment>\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/)",
+  "(?<string>\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')",
+  `(?<keyword>\\b(?:${KEYWORDS.join("|")})\\b)`,
+  `(?<type>\\b(?:${BUILTIN_TYPES.join("|")}|string)\\b)`,
+  "(?<namespace>\\bstd\\b)",
+  "(?<number>\\b(?:0[xX][\\da-fA-F']+|\\d[\\d']*(?:\\.\\d[\\d']*)?)\\b)",
+].join("|"), "gm");
 
 /** Create or enhance a native textarea-based C++ fallback editor. */
 export function createCppFallbackEditor(
@@ -127,7 +163,7 @@ function highlightCpp(code: HTMLElement, source: string): void {
   for (const match of source.matchAll(TOKEN_PATTERN)) {
     fragment.append(document.createTextNode(source.slice(offset, match.index)));
     const token = document.createElement("span");
-    token.className = tokenClass(match[0]);
+    token.className = tokenClass(match.groups);
     token.textContent = match[0];
     fragment.append(token);
     offset = match.index! + match[0].length;
@@ -136,13 +172,9 @@ function highlightCpp(code: HTMLElement, source: string): void {
   code.replaceChildren(fragment);
 }
 
-function tokenClass(token: string): string {
-  token = token.trim();
-  if (['{', '}', '(', ')'].includes(token)) return "clangd-token-punctuation";
-  if (token.startsWith("#") && !token.startsWith("#include")) return "clangd-token-preprocessor";
-  if (token.startsWith("//") || token.startsWith("/*")) return "clangd-token-comment";
-  if (token.startsWith('"') || token.startsWith("'")) return "clangd-token-string";
-  if (/^(?:bool|char|char8_t|char16_t|char32_t|double|float|int|long|short|signed|unsigned|void|wchar_t|string|std)$/.test(token)) return "clangd-token-type";
-  if (/^\d|^0[xX]/.test(token)) return "clangd-token-number";
-  return "clangd-token-keyword";
+function tokenClass(groups: Record<string, string> | undefined): string {
+  for (const [group, className] of Object.entries(TOKEN_CLASSES)) {
+    if (groups?.[group] !== undefined) return className;
+  }
+  return "";
 }

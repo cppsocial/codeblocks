@@ -1,141 +1,224 @@
 import { expect, test } from "@playwright/test";
 
-test("fallback and Run remain usable while the cross-origin runtime is slow", async ({ page }) => {
-  let compiledSource = "";
-  await page.route("https://godbolt.org/api/**", async (route) => {
-    compiledSource = JSON.parse(route.request().postData() ?? "{}").source;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ didExecute: true, code: 0, stdout: [{ text: "\u001b[1;31mearly run\u001b[0m" }], stderr: [], buildResult: { stderr: [] } }),
-    });
-  });
-
-  await page.goto("http://localhost:4173/?delay=5000", { waitUntil: "domcontentloaded" });
-  const fallback = page.getByLabel("C++ source code");
-  await expect(fallback).toBeVisible();
-  await expect(page.locator(".clangd-token-preprocessor")).toHaveText("#include <iostream>");
-  await expect(page.locator(".clangd-fallback-lines")).toContainText("7");
-  await fallback.fill("int main() { return 7; } // before Monaco");
-  await expect(page.locator("[data-run]")).toBeEnabled();
-  await expect(page.getByText("Open in Compiler Explorer (new tab)")).toBeVisible();
-  await expect(page.locator("[data-output-drawer]")).toBeHidden();
-
-  await page.locator("[data-run]").click();
-  await expect(page.locator("[data-output-drawer]")).toBeVisible();
-  await expect(page.locator("[data-output]")).toContainText("early run");
-  await expect(page.locator("[data-output] .clangd-ansi-bold")).toHaveCSS("color", "rgb(205, 49, 49)");
-  expect(await page.locator("[data-output]").textContent()).not.toContain("\u001b[");
-  expect(compiledSource).toContain("before Monaco");
+test("the example uses one public script and stylesheet and shows debug controls", async ({ page }) => {
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  const block = page.locator("codeblock");
+  await expect(block).toHaveClass(/codeblocks-root/);
+  expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
+  await expect(page.locator(".codeblocks-debug")).toBeVisible();
+  await expect(page.locator("[data-theme-toggle]")).toBeVisible();
+  await expect(page.locator("[data-editor-toggle]")).toBeVisible();
+  await expect(page.locator("[data-status]")).toBeHidden();
+  await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
+  expect(await page.locator('link[rel="stylesheet"][href]').count()).toBe(1);
+  expect(await page.locator('script[src]').count()).toBe(1);
+  expect((await block.innerText()).toLowerCase()).not.toContain("monaco");
+  expect((await block.innerText()).toLowerCase()).not.toContain("clangd");
 });
 
-test("cross-origin Monaco handoff preserves edits, layout, and host DOM", async ({ page }) => {
-  let compiledSource = "";
-  await page.route("https://godbolt.org/api/**", async (route) => {
-    compiledSource = JSON.parse(route.request().postData() ?? "{}").source;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ didExecute: true, code: 0, stdout: [{ text: "Monaco run" }], stderr: [], buildResult: { stderr: [] } }),
-    });
-  });
-  await page.route("**/wasm/clangd.wasm", async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+test("fallback and Run work before the full editor loads", async ({ page }) => {
+  let compiler = "";
+  let args = "";
+  let source = "";
+  await page.route("**/assets/runtime-*.js", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
     await route.continue();
   });
-  await page.goto("http://localhost:4173/?delay=800", { waitUntil: "domcontentloaded" });
-  expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
-
-  await page.evaluate(() => {
-    const fallback = document.querySelector("[data-fallback]")!;
-    const textarea = fallback.querySelector("textarea")!;
-    textarea.value += "\n// typed during Monaco startup";
-    textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    (window as any).hostNodes = {
-      run: document.querySelector("[data-run]"),
-      link: document.querySelector("a"),
-      output: document.querySelector("[data-output-drawer]"),
-      height: document.querySelector(".editor-shell")!.getBoundingClientRect().height,
-    };
+  await page.route("https://godbolt.org/api/**", async (route) => {
+    const request = JSON.parse(route.request().postData() ?? "{}");
+    compiler = request.compiler;
+    args = request.options.userArguments;
+    source = request.source;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        didExecute: true,
+        stdout: [{ text: "\u001b[1;31mcolored\u001b[K output\u001b[0m" }],
+        stderr: [],
+        buildResult: { stderr: [] },
+      }),
+    });
   });
 
-  await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator("[data-fallback]")).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => (window as any).cppEditor.getValue())).toContain("typed during Monaco startup");
-  expect(await page.evaluate(() => {
-    const refs = (window as any).hostNodes;
-    return refs.run === document.querySelector("[data-run]") &&
-      refs.link === document.querySelector("a") &&
-      refs.output === document.querySelector("[data-output-drawer]") &&
-      refs.height === document.querySelector(".editor-shell")!.getBoundingClientRect().height;
-  })).toBe(true);
-  await expect(page.locator("[data-status]")).toContainText("loading clangd", { ignoreCase: true });
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("codeblock")).toHaveClass(/codeblocks-root/);
+  expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
+  const fallback = page.getByLabel("C++ source code");
+  await expect(fallback).toBeVisible();
+  await expect(page.locator(".clangd-token-preprocessor")).toHaveText("#include");
+  await expect(page.locator(".clangd-token-header")).toHaveText("<print>");
+  await expect(page.locator(".clangd-token-type").first()).toHaveText("int");
+  await expect(page.locator(".clangd-token-namespace").first()).toHaveText("std");
+  await fallback.fill("int main() { return 7; } // before upgrade");
   await page.locator("[data-run]").click();
-  await expect(page.locator("[data-output]")).toContainText("Monaco run");
-  expect(compiledSource).toContain("typed during Monaco startup");
+  await expect(page.locator("[data-output]")).toContainText("colored output");
+  expect(await page.locator("[data-output]").textContent()).not.toContain("\u001b[K");
+  await expect(page.locator("[data-output] .clangd-ansi-bold").first())
+    .toHaveCSS("color", "rgb(205, 49, 49)");
+  expect(compiler).toBe("gsnapshot");
+  expect(args).toBe("-std=c++26 -freflection");
+  expect(source).toContain("before upgrade");
+});
 
+test("editor switch has matching surfaces and explicit themes", async ({ page }) => {
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
+  const block = page.locator("codeblock");
+  const prefersDark = await page.evaluate(() =>
+    matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  await expect(block).toHaveAttribute("data-theme", prefersDark ? "dark" : "light");
+  await page.locator("[data-theme-toggle]").click();
+  const switchedTheme = prefersDark ? "light" : "dark";
+  await expect(block).toHaveAttribute("data-theme", switchedTheme);
+  await expect.poll(() => page.locator(".monaco-editor").evaluate((element) =>
+    getComputedStyle(element).backgroundColor,
+  )).toBe(switchedTheme === "light" ? "rgb(255, 255, 255)" : "rgb(30, 30, 30)");
   await page.locator("[data-editor-toggle]").click();
   await expect(page.locator("[data-fallback]")).toBeVisible();
   await expect(page.locator(".monaco-editor")).toBeHidden();
-  const fallbackContentX = await page.locator(".clangd-fallback-highlight").evaluate((element) => element.getBoundingClientRect().x);
-  await page.getByLabel("C++ source code").fill("int toggled_fallback = 1;");
+  await expect(page.locator(".clangd-browser-fallback"))
+    .toHaveCSS(
+      "background-color",
+      switchedTheme === "light" ? "rgb(255, 255, 255)" : "rgb(30, 30, 30)",
+    );
   await page.locator("[data-editor-toggle]").click();
-  await expect(page.locator("[data-fallback]")).toHaveCount(0);
   await expect(page.locator(".monaco-editor")).toBeVisible();
-  expect(await page.evaluate(() => (window as any).cppEditor.getValue())).toContain("toggled_fallback");
-  const monacoContentX = await page.locator(".monaco-editor .view-lines").evaluate((element) => element.getBoundingClientRect().x);
-  expect(Math.abs(fallbackContentX - monacoContentX)).toBeLessThanOrEqual(6);
 });
 
-test("clangd pthreads start cross-origin and provide diagnostics", async ({ page }) => {
-  await page.route("https://godbolt.org/api/**", (route) => route.fulfill({
-    contentType: "application/json",
-    body: JSON.stringify({ didExecute: true, code: 0, stdout: [{ text: "Run after clangd" }], stderr: [], buildResult: { stderr: [] } }),
-  }));
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+test("clangd starts once and serves multiple independent code blocks", async ({ page }) => {
+  const consoleMessages: string[] = [];
+  let wasmRequests = 0;
+  page.on("console", (message) => consoleMessages.push(message.text()));
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/wasm/clangd.wasm")) wasmRequests++;
   });
   await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
-  await page.evaluate(() => (window as any).cppEditor.clangdReady);
-  await expect(page.locator("[data-status]")).toHaveText("Monaco + clangd ready");
-  await page.evaluate(() => (window as any).cppEditor.setValue("int main() { return symbol_that_does_not_exist; }"));
-  await expect(page.locator(".squiggly-error").first()).toBeVisible({ timeout: 30_000 });
-  await page.locator("[data-run]").click();
-  await expect(page.locator("[data-output]")).toContainText("Run after clangd");
-  expect(errors.filter((value) => /worker|security|cross-origin/i.test(value))).toEqual([]);
+  await page.evaluate(async () => {
+    await (globalThis as any).CodeBlocks.ready;
+    const second = document.createElement("codeblock");
+    second.textContent = "int second() { return 2; }";
+    document.querySelector("main")!.append(second);
+  });
+  await expect(page.locator(".monaco-editor")).toHaveCount(2, { timeout: 60_000 });
+  await page.evaluate(async () => {
+    const blocks = document.querySelectorAll<HTMLElement>("codeblock");
+    const first = (globalThis as any).CodeBlocks.get(blocks[0]);
+    const second = (globalThis as any).CodeBlocks.get(blocks[1]);
+    await Promise.all([first.editorReady, second.editorReady, first.clangdReady]);
+    first.setValue("int first_value = 1;");
+    second.setValue("int second_value = 2;");
+  });
+  expect(await page.evaluate(() => {
+    const blocks = document.querySelectorAll<HTMLElement>("codeblock");
+    return Array.from(blocks, (block) => (globalThis as any).CodeBlocks.get(block).getValue());
+  })).toEqual(["int first_value = 1;", "int second_value = 2;"]);
+  expect(wasmRequests).toBe(1);
+  expect(consoleMessages.join("\n")).not.toContain(
+    "Received message which is neither a response nor a notification message",
+  );
+  expect(consoleMessages.join("\n")).not.toContain(
+    "Unable to read file '/home/web_user'",
+  );
 });
 
-test("the same package works below /assets/clangd on the host origin", async ({ page }) => {
-  await page.goto("http://localhost:4175/", { waitUntil: "domcontentloaded" });
+test("the main API exposes Monaco options, styling, and the editor instance", async ({ page }) => {
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("codeblock")).toHaveClass(/codeblocks-root/);
+  await page.evaluate(async () => {
+    const api = await (globalThis as any).CodeBlocks.ready;
+    api.configure({
+      editorOptions: { fontSize: 18 },
+      styles: { "editor-height": "240px" },
+    });
+    const block = document.createElement("codeblock");
+    block.textContent = "int configured = 1;";
+    document.querySelector("main")!.append(block);
+  });
+  await expect(page.locator("codeblock").nth(1).locator(".monaco-editor"))
+    .toBeVisible({ timeout: 60_000 });
+  expect(await page.locator("codeblock").nth(1).locator(".codeblocks-editor-shell")
+    .evaluate((element) => getComputedStyle(element).height)).toBe("240px");
+  expect(await page.evaluate(async () => {
+    const block = document.querySelectorAll<HTMLElement>("codeblock")[1];
+    const instance = (globalThis as any).CodeBlocks.get(block);
+    const monaco = await instance.monacoReady;
+    return monaco.getRawOptions().fontSize;
+  })).toBe(18);
+});
+
+test("code help works under the opt-in isolation service worker", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("codeblock")).toHaveClass(/codeblocks-root/);
+  expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator("[data-fallback]")).toHaveCount(0);
-  expect(await page.evaluate(() => (window as any).cppEditor.getValue())).toContain("Hello from the browser");
+  await page.evaluate(async () => {
+    const block = document.querySelector<HTMLElement>("codeblock")!;
+    const instance = (globalThis as any).CodeBlocks.get(block);
+    await instance.clangdReady;
+    instance.setValue("int main() { return symbol_that_does_not_exist; }");
+  });
+  await expect(page.locator(".squiggly-error").first()).toBeVisible({ timeout: 30_000 });
+  expect(errors).toEqual([]);
 });
 
-test("runtime failure leaves the fallback editor intact", async ({ page }) => {
-  await page.goto("http://localhost:4173/?runtime=http://localhost:4174/missing.js", { waitUntil: "networkidle" });
-  const fallback = page.getByLabel("C++ source code");
-  await expect(fallback).toBeVisible();
-  await fallback.fill("still editable");
-  await expect(fallback).toHaveValue("still editable");
-  await expect(page.locator("[data-status]")).toContainText("runtime unavailable");
-});
-
-test("clangd failure leaves Monaco usable", async ({ page }) => {
-  await page.route("**/wasm/clangd.wasm", (route) => route.abort("failed"));
+test("overflow widgets are not clipped by the code block", async ({ page }) => {
   await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator("[data-status]")).toContainText("clangd unavailable");
-  await page.evaluate(() => (window as any).cppEditor.setValue("int usable_without_clangd = 1;"));
-  expect(await page.evaluate(() => (window as any).cppEditor.getValue())).toContain("usable_without_clangd");
+  await expect(page.locator(".overflowingContentWidgets")).toHaveCSS("overflow", "visible");
+  expect(await page.locator("codeblock").evaluate((element) =>
+    getComputedStyle(element).overflow,
+  )).toBe("visible");
 });
 
-test("a non-isolated host gets Monaco and a useful clangd error", async ({ page }) => {
-  await page.goto("http://localhost:4176/", { waitUntil: "domcontentloaded" });
-  expect(await page.evaluate(() => crossOriginIsolated)).toBe(false);
-  await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator("[data-status]")).toContainText("clangd unavailable");
-  await page.evaluate(() => (window as any).cppEditor.setValue("int basic_editor_still_works;"));
-  expect(await page.evaluate(() => (window as any).cppEditor.getValue())).toContain("basic_editor_still_works");
+test("tabs preserve independent sources and arbitrary container sizes relayout", async ({ page }) => {
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("codeblock")).toHaveClass(/codeblocks-root/);
+  await expect(page.locator(".codeblocks-tabs")).toBeVisible();
+  await expect(page.locator(".codeblocks-tab")).toHaveCount(2);
+  await expect(page.locator(".codeblocks-tab").first()).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.locator(".codeblocks-tab").nth(1).click();
+  await expect(page.locator(".codeblocks-tab").nth(1)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect.poll(() => page.evaluate(() => {
+    const element = document.querySelector<HTMLElement>("codeblock")!;
+    return (globalThis as any).CodeBlocks.get(element).getValue();
+  })).toContain("another tab");
+
+  await page.evaluate(async () => {
+    const element = document.querySelector<HTMLElement>("codeblock")!;
+    const block = (globalThis as any).CodeBlocks.get(element);
+    block.setValue("int changed_second = 2;");
+    block.selectTab("main.cpp");
+    element.style.width = "317px";
+    element.style.setProperty("--codeblocks-editor-height", "233px");
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  await expect(page.locator(".codeblocks-editor-shell")).toHaveCSS("height", "233px");
+  await expect(page.locator("codeblock")).toHaveCSS("width", "317px");
+  expect(await page.evaluate(async () => {
+    const element = document.querySelector<HTMLElement>("codeblock")!;
+    const block = (globalThis as any).CodeBlocks.get(element);
+    const editor = await block.monacoReady;
+    return {
+      tabs: block.getTabs(),
+      layoutWidth: editor.getLayoutInfo().width,
+      hostWidth: element.querySelector(".codeblocks-editor-shell").clientWidth,
+    };
+  })).toEqual({
+    tabs: [
+      { name: "main.cpp", value: expect.stringContaining("println") },
+      { name: "second.cpp", value: "int changed_second = 2;" },
+    ],
+    layoutWidth: 315,
+    hostWidth: 315,
+  });
 });

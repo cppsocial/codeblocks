@@ -1,6 +1,13 @@
 .clangd-browser-fallback {
-  --clangd-fallback-bg: #1f1f1f;
+  --clangd-fallback-bg: #1e1e1e;
   --clangd-fallback-fg: #d4d4d4;
+  --clangd-token-comment: #6a9955;
+  --clangd-token-string: #ce9178;
+  --clangd-token-preprocessor: #569cd6;
+  --clangd-token-keyword: #569cd6;
+  --clangd-token-number: #b5cea8;
+  --clangd-token-namespace: #4ec9b0;
+  --clangd-token-type: #4ec9b0;
   --clangd-fallback-gutter: 31px;
   --clangd-fallback-pad-y: 16px;
   --clangd-fallback-font: 14px/23px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -59,10 +66,11 @@
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
-.clangd-token-comment { color: #6a9955; }
-.clangd-token-string { color: #ce9178; }
-.clangd-token-preprocessor { color: #c586c0; }
-.clangd-token-keyword { color: #569cd6; }
-.clangd-token-type { color: #4ec9b0; }
-.clangd-token-number { color: #b5cea8; }
-.clangd-token-punctuation { color: #ffd700; }
+.clangd-token-comment { color: var(--clangd-token-comment); }
+.clangd-token-string,
+.clangd-token-header { color: var(--clangd-token-string); }
+.clangd-token-preprocessor { color: var(--clangd-token-preprocessor); }
+.clangd-token-keyword { color: var(--clangd-token-keyword); }
+.clangd-token-number { color: var(--clangd-token-number); }
+.clangd-token-namespace { color: var(--clangd-token-namespace); }
+.clangd-token-type { color: var(--clangd-token-type); }

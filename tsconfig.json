@@ -21,6 +21,7 @@
     "src/runtime.ts",
     "src/ansi.ts",
     "src/fallback.ts",
+    "src/codeblocks.ts",
     "src/runtime/**/*.ts",
     "src/config.ts",
     "src/json_stream.ts",

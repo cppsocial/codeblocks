@@ -18,7 +18,9 @@ const ANSI_COLORS = [
   "#3b8eea", "#d670d6", "#29b8db", "#ffffff",
 ];
 
-/** Safely render ANSI SGR text without using innerHTML. */
+const CSI_PATTERN = /\x1b\[([0-9;?]*)([ -/]*)([@-~])/g;
+
+/** Safely render ANSI terminal text without using innerHTML. */
 export function ansiToFragment(
   value: string,
   options: AppendAnsiOptions = {},
@@ -28,7 +30,7 @@ export function ansiToFragment(
   return fragment;
 }
 
-/** Append ANSI SGR text as text nodes and styled spans. */
+/** Append ANSI terminal text as text nodes and styled spans. */
 export function appendAnsi(
   parent: ParentNode,
   value: string,
@@ -42,18 +44,19 @@ export function appendAnsi(
     color: "",
     background: "",
   };
-  const pattern = /\x1b\[([0-9;]*)m/g;
   let offset = 0;
-  for (const match of value.matchAll(pattern)) {
+  for (const match of value.matchAll(CSI_PATTERN)) {
     appendSegment(parent, value.slice(offset, match.index), state, options.className);
-    applyCodes(state, (match[1] || "0").split(";").map(Number));
+    if (match[3] === "m") {
+      applyCodes(state, (match[1] || "0").split(";").map(Number));
+    }
     offset = match.index! + match[0].length;
   }
   appendSegment(parent, value.slice(offset), state, options.className);
 }
 
 export function stripAnsi(value: string): string {
-  return value.replace(/\x1b\[[0-9;]*m/g, "");
+  return value.replace(CSI_PATTERN, "");
 }
 
 function appendSegment(

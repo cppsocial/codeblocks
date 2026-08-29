@@ -1,0 +1,502 @@
+import type { editor as MonacoEditor } from "monaco-editor";
+import { appendAnsi } from "./ansi";
+import { createCppFallbackEditor, type CppFallbackEditor } from "./fallback";
+import type { CppEditor, EditorStatus } from "./runtime";
+import "./codeblocks.css";
+
+export type CodeBlockTheme = "auto" | "light" | "dark";
+
+export interface CodeBlocksConfiguration {
+  theme?: CodeBlockTheme;
+  showDebugControls?: boolean;
+  showStatus?: boolean;
+  compiler?: string;
+  args?: string;
+  compilerExplorerUrl?: string;
+  editorOptions?: MonacoEditor.IStandaloneEditorConstructionOptions;
+  styles?: Record<string, string>;
+  onStatus?: (status: EditorStatus) => void;
+}
+
+export interface CreateCodeBlockOptions extends CodeBlocksConfiguration {
+  element: HTMLElement;
+  value?: string;
+}
+
+export interface CodeBlock {
+  getValue(): string;
+  setValue(value: string): void;
+  getTabs(): Array<{ name: string; value: string }>;
+  selectTab(tab: string | number): void;
+  focus(): void;
+  run(): Promise<void>;
+  setTheme(theme: CodeBlockTheme): Promise<void>;
+  dispose(): void;
+  onDidChange(callback: (value: string) => void): () => void;
+  editorReady: Promise<CppEditor>;
+  monacoReady: Promise<MonacoEditor.IStandaloneCodeEditor>;
+  clangdReady: Promise<void>;
+}
+
+const instances = new WeakMap<HTMLElement, CodeBlock>();
+let configuration: CodeBlocksConfiguration = {};
+let observer: MutationObserver | undefined;
+
+export function configureCodeBlocks(options: CodeBlocksConfiguration): void {
+  configuration = { ...configuration, ...options };
+}
+
+export function getCodeBlock(element: HTMLElement): CodeBlock | undefined {
+  return instances.get(element);
+}
+
+export function startCodeBlocks(root: ParentNode = document): void {
+  upgradeWithin(root);
+  if (observer || root !== document) return;
+  observer = new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node instanceof Element) upgradeWithin(node);
+      }
+    }
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
+  if (!(options.element instanceof HTMLElement)) {
+    throw new TypeError("createCodeBlock requires an HTMLElement");
+  }
+
+  const root = options.element;
+  const tabs = readTabs(root, options.value);
+  let activeTab = 0;
+  const initialValue = tabs[0].value;
+  const tabBar = document.createElement("div");
+  tabBar.className = "codeblocks-tabs";
+  tabBar.setAttribute("role", "tablist");
+  tabBar.setAttribute("aria-label", "Source files");
+  const tabButtons = tabs.map((tab, index) => {
+    const tabButton = button(tab.name, true);
+    tabButton.className = "codeblocks-tab";
+    tabButton.dataset.tabIndex = String(index);
+    tabButton.setAttribute("role", "tab");
+    tabButton.setAttribute("aria-selected", index === 0 ? "true" : "false");
+    tabButton.tabIndex = index === 0 ? 0 : -1;
+    tabButton.addEventListener("click", () => selectTab(index));
+    tabBar.append(tabButton);
+    return tabButton;
+  });
+  const editorShell = document.createElement("div");
+  editorShell.className = "codeblocks-editor-shell";
+  const fallbackHost = document.createElement("div");
+  fallbackHost.className = "codeblocks-fallback";
+  fallbackHost.dataset.fallback = "";
+  const monacoHost = document.createElement("div");
+  monacoHost.className = "codeblocks-monaco";
+  monacoHost.dataset.monacoHost = "";
+  monacoHost.setAttribute("aria-label", "C++ code editor");
+  editorShell.append(fallbackHost, monacoHost);
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "codeblocks-toolbar";
+  const runButton = button("Run");
+  runButton.dataset.run = "";
+  const debugControls = document.createElement("span");
+  debugControls.className = "codeblocks-debug";
+  debugControls.hidden = !options.showDebugControls;
+  const editorToggle = button("Show basic editor", true);
+  editorToggle.dataset.editorToggle = "";
+  editorToggle.disabled = true;
+  const themeToggle = button("Use light theme", true);
+  themeToggle.dataset.themeToggle = "";
+  debugControls.append(editorToggle, themeToggle);
+  const compilerLink = document.createElement("a");
+  compilerLink.href = options.compilerExplorerUrl ?? "https://compiler-explorer.com/";
+  compilerLink.target = "_blank";
+  compilerLink.rel = "noopener";
+  compilerLink.textContent = "Open in Compiler Explorer";
+  const status = document.createElement("span");
+  status.className = "codeblocks-status";
+  status.dataset.status = "";
+  status.hidden = !options.showStatus;
+  status.textContent = "Code editor ready";
+  toolbar.append(runButton, debugControls, compilerLink, status);
+
+  const outputDrawer = document.createElement("section");
+  outputDrawer.className = "codeblocks-output";
+  outputDrawer.dataset.outputDrawer = "";
+  outputDrawer.hidden = true;
+  outputDrawer.setAttribute("aria-live", "polite");
+  const outputHeader = document.createElement("header");
+  outputHeader.textContent = "Output";
+  const output = document.createElement("pre");
+  output.dataset.output = "";
+  outputDrawer.append(outputHeader, output);
+
+  root.classList.add("codeblocks-root");
+  root.replaceChildren(...(tabs.length > 1 ? [tabBar] : []), editorShell, toolbar, outputDrawer);
+  const requestedWidth = root.getAttribute("width");
+  const requestedHeight = root.getAttribute("height");
+  const requestedMinHeight = root.getAttribute("min-height");
+  if (requestedWidth) root.style.width = requestedWidth;
+  if (requestedHeight) root.style.setProperty("--codeblocks-editor-height", requestedHeight);
+  if (requestedMinHeight) {
+    root.style.setProperty("--codeblocks-editor-min-height", requestedMinHeight);
+  }
+  for (const [name, value] of Object.entries(options.styles ?? {})) {
+    root.style.setProperty(name.startsWith("--") ? name : `--codeblocks-${name}`, value);
+  }
+
+  let themeMode = options.theme ?? "auto";
+  let resolvedTheme = resolveTheme(themeMode);
+  root.dataset.theme = resolvedTheme;
+  updateThemeButton();
+
+  let fallback: CppFallbackEditor | undefined = createCppFallbackEditor({
+    element: fallbackHost,
+    value: initialValue,
+  });
+  let editor: CppEditor | undefined;
+  let activeEditor: Pick<CppEditor, "getValue" | "setValue" | "focus"> = fallback;
+  let disposed = false;
+  const changeListeners = new Set<(value: string) => void>();
+  let unsubscribeActive = fallback.onDidChange(notifyChange);
+
+  let resolveClangd!: () => void;
+  let rejectClangd!: (error: unknown) => void;
+  const clangdReady = new Promise<void>((resolve, reject) => {
+    resolveClangd = resolve;
+    rejectClangd = reject;
+  });
+  void clangdReady.catch(() => {});
+
+  runButton.addEventListener("click", run);
+  editorToggle.addEventListener("click", toggleEditor);
+  themeToggle.addEventListener("click", toggleTheme);
+  const media = matchMedia("(prefers-color-scheme: dark)");
+  const systemThemeChanged = () => {
+    if (themeMode === "auto") void setTheme("auto");
+  };
+  media.addEventListener("change", systemThemeChanged);
+  const resizeObserver = new ResizeObserver(() => editor?.layout());
+  resizeObserver.observe(editorShell);
+
+  const editorReady = upgradeEditor();
+  const monacoReady = editorReady.then((created) => created.getMonacoEditor());
+  void editorReady.catch((error: unknown) => {
+    status.textContent = "Basic editor ready";
+    status.title = `Code help is unavailable: ${errorMessage(error)}`;
+    rejectClangd(error);
+  });
+
+  async function upgradeEditor(): Promise<CppEditor> {
+    const { createCppEditor } = await import("./runtime");
+    const created = await createCppEditor({
+      element: monacoHost,
+      value: fallback?.getValue() ?? initialValue,
+      theme: resolvedTheme,
+      editorOptions: options.editorOptions,
+      onStatus: reportStatus,
+    });
+    if (disposed) {
+      created.dispose();
+      throw new Error("Code block was disposed while the editor was loading");
+    }
+
+    editor = created;
+    created.setValue(fallback?.getValue() ?? created.getValue());
+    await created.setTheme(resolvedTheme);
+    monacoHost.style.background = themeBackground(resolvedTheme);
+    created.layout();
+    await afterPaint();
+    monacoHost.dataset.ready = "";
+    await afterPaint();
+    removeFallback();
+    activeEditor = created;
+    subscribeToActive(created);
+    editorToggle.disabled = false;
+    status.textContent = "Code editor ready";
+    created.clangdReady.then(resolveClangd, rejectClangd);
+    return created;
+  }
+
+  function reportStatus(event: EditorStatus): void {
+    options.onStatus?.(event);
+    if (event.type === "clangd-downloading") {
+      const percent = event.total
+        ? ` ${Math.round((event.loaded / event.total) * 100)}%`
+        : "";
+      status.textContent = `Preparing code help${percent}`;
+    } else if (event.type === "clangd-starting") {
+      status.textContent = "Preparing code help";
+    } else if (event.type === "clangd-ready") {
+      status.textContent = "Code help ready";
+    } else if (event.type === "clangd-error") {
+      status.textContent = "Code editor ready";
+      status.title = `Code help is unavailable: ${event.error.message}`;
+    }
+  }
+
+  async function run(): Promise<void> {
+    if (disposed || runButton.disabled) return;
+    runButton.disabled = true;
+    runButton.textContent = "Running...";
+    outputDrawer.hidden = false;
+    output.textContent = "Compiling...";
+    try {
+      const result = await executeCode(
+        activeEditor.getValue(),
+        options.compiler ?? "clang2110",
+        options.args ?? "-std=c++2c -Wall -Wextra -pedantic-errors",
+      );
+      const diagnostics = joinLines(result.buildResult?.stderr);
+      const stdout = joinLines(result.stdout);
+      const stderr = joinLines(result.stderr);
+      output.replaceChildren();
+      if (result.didExecute) {
+        if (!stdout && !stderr) output.textContent = "Program completed with no output.";
+        else {
+          appendAnsi(output, stdout);
+          if (stdout && stderr) output.append("\n");
+          appendAnsi(output, stderr, { className: "codeblocks-stderr" });
+        }
+      } else {
+        appendAnsi(output, diagnostics || "Compilation failed without diagnostics.");
+      }
+    } catch (error) {
+      output.textContent = `Run failed: ${errorMessage(error)}`;
+    } finally {
+      runButton.disabled = false;
+      runButton.textContent = "Run";
+    }
+  }
+
+  function toggleEditor(): void {
+    if (!editor) return;
+    if (fallback) {
+      editor.setValue(fallback.getValue());
+      removeFallback();
+      monacoHost.hidden = false;
+      monacoHost.dataset.ready = "";
+      editor.layout();
+      activeEditor = editor;
+      subscribeToActive(editor);
+      editorToggle.textContent = "Show basic editor";
+    } else {
+      monacoHost.hidden = true;
+      delete monacoHost.dataset.ready;
+      fallback = createCppFallbackEditor({ element: fallbackHost, value: editor.getValue() });
+      editorShell.prepend(fallbackHost);
+      activeEditor = fallback;
+      subscribeToActive(fallback);
+      editorToggle.textContent = "Show full editor";
+    }
+  }
+
+  function toggleTheme(): void {
+    void setTheme(resolvedTheme === "dark" ? "light" : "dark");
+  }
+
+  async function setTheme(theme: CodeBlockTheme): Promise<void> {
+    themeMode = theme;
+    resolvedTheme = resolveTheme(theme);
+    root.dataset.theme = resolvedTheme;
+    monacoHost.style.background = themeBackground(resolvedTheme);
+    updateThemeButton();
+    await editor?.setTheme(resolvedTheme);
+  }
+
+  function updateThemeButton(): void {
+    themeToggle.textContent = resolvedTheme === "dark" ? "Use light theme" : "Use dark theme";
+  }
+
+  function removeFallback(): void {
+    if (!fallback) return;
+    fallback.dispose();
+    fallback = undefined;
+    fallbackHost.remove();
+  }
+
+  function subscribeToActive(source: CppEditor | CppFallbackEditor): void {
+    unsubscribeActive();
+    unsubscribeActive = source.onDidChange(notifyChange);
+  }
+
+  function notifyChange(value: string): void {
+    tabs[activeTab].value = value;
+    changeListeners.forEach((listener) => listener(value));
+  }
+
+  function selectTab(tab: string | number): void {
+    const index = typeof tab === "number"
+      ? tab
+      : tabs.findIndex((candidate) => candidate.name === tab);
+    if (index < 0 || index >= tabs.length || index === activeTab) return;
+    tabs[activeTab].value = activeEditor.getValue();
+    activeTab = index;
+    activeEditor.setValue(tabs[index].value);
+    tabButtons.forEach((tabButton, buttonIndex) => {
+      const selected = buttonIndex === index;
+      tabButton.setAttribute("aria-selected", selected ? "true" : "false");
+      tabButton.tabIndex = selected ? 0 : -1;
+    });
+    activeEditor.focus();
+  }
+
+  const instance: CodeBlock = {
+    getValue: () => activeEditor.getValue(),
+    setValue(value) {
+      tabs[activeTab].value = value;
+      activeEditor.setValue(value);
+    },
+    getTabs: () => tabs.map((tab, index) => ({
+      name: tab.name,
+      value: index === activeTab ? activeEditor.getValue() : tab.value,
+    })),
+    selectTab,
+    focus: () => activeEditor.focus(),
+    run,
+    setTheme,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      runButton.removeEventListener("click", run);
+      editorToggle.removeEventListener("click", toggleEditor);
+      themeToggle.removeEventListener("click", toggleTheme);
+      media.removeEventListener("change", systemThemeChanged);
+      resizeObserver.disconnect();
+      unsubscribeActive();
+      changeListeners.clear();
+      fallback?.dispose();
+      editor?.dispose();
+      root.replaceChildren();
+      root.classList.remove("codeblocks-root");
+      delete root.dataset.theme;
+      delete root.dataset.codeblocksUpgraded;
+      instances.delete(root);
+    },
+    onDidChange(callback) {
+      changeListeners.add(callback);
+      return () => changeListeners.delete(callback);
+    },
+    editorReady,
+    monacoReady,
+    clangdReady,
+  };
+  instances.set(root, instance);
+  return instance;
+}
+
+function upgradeWithin(root: ParentNode): void {
+  const elements: HTMLElement[] = [];
+  if (root instanceof HTMLElement && root.localName === "codeblock") elements.push(root);
+  elements.push(...root.querySelectorAll<HTMLElement>("codeblock:not([data-codeblocks-upgraded])"));
+  for (const element of elements) {
+    if (element.dataset.codeblocksUpgraded !== undefined) continue;
+    element.dataset.codeblocksUpgraded = "";
+    const instance = createCodeBlock({
+      ...configuration,
+      element,
+      theme: attributeTheme(element) ?? configuration.theme,
+      showDebugControls: element.hasAttribute("debug") || configuration.showDebugControls,
+      showStatus: element.hasAttribute("status") || configuration.showStatus,
+      compiler: element.getAttribute("compiler") ?? configuration.compiler,
+      args: element.getAttribute("args") ?? configuration.args,
+    });
+    instances.set(element, instance);
+  }
+}
+
+function sourceFromElement(element: HTMLElement): string {
+  const source = element.textContent ?? "";
+  return source.startsWith("\n") ? source.slice(1).replace(/[ \t]*\n?$/, "") : source;
+}
+
+function readTabs(
+  element: HTMLElement,
+  explicitValue: string | undefined,
+): Array<{ name: string; value: string }> {
+  if (explicitValue !== undefined) return [{ name: "main.cpp", value: explicitValue }];
+  const tabElements = Array.from(
+    element.querySelectorAll<HTMLElement>(":scope > codeblock-tab"),
+  );
+  if (!tabElements.length) {
+    return [{ name: element.getAttribute("filename") ?? "main.cpp", value: sourceFromElement(element) }];
+  }
+  return tabElements.map((tab, index) => ({
+    name: tab.getAttribute("name") ?? tab.getAttribute("filename") ?? `File ${index + 1}`,
+    value: sourceFromElement(tab),
+  }));
+}
+
+function attributeTheme(element: HTMLElement): CodeBlockTheme | undefined {
+  const value = element.getAttribute("theme");
+  return value === "auto" || value === "light" || value === "dark" ? value : undefined;
+}
+
+function button(label: string, secondary = false): HTMLButtonElement {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.textContent = label;
+  if (secondary) element.className = "codeblocks-secondary";
+  return element;
+}
+
+function resolveTheme(theme: CodeBlockTheme): "light" | "dark" {
+  if (theme === "light" || theme === "dark") return theme;
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function themeBackground(theme: "light" | "dark"): string {
+  return theme === "light" ? "#ffffff" : "#1e1e1e";
+}
+
+function afterPaint(): Promise<void> {
+  return new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+interface CompilerLine { text: string }
+interface CompilerResult {
+  didExecute: boolean;
+  stdout?: CompilerLine[];
+  stderr?: CompilerLine[];
+  buildResult?: { stderr?: CompilerLine[] };
+}
+
+function joinLines(lines: CompilerLine[] = []): string {
+  return lines.map((line) => line.text).join("\n");
+}
+
+async function executeCode(
+  source: string,
+  compiler: string,
+  args: string,
+): Promise<CompilerResult> {
+  const response = await fetch(
+    `https://godbolt.org/api/compiler/${encodeURIComponent(compiler)}/compile`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        source,
+        compiler,
+        lang: "c++",
+        options: {
+          userArguments: args,
+          compilerOptions: { executorRequest: true },
+          executeParameters: { args: [], stdin: "" },
+          filters: { execute: true },
+        },
+      }),
+    },
+  );
+  if (!response.ok) throw new Error(`Compiler service returned ${response.status}`);
+  return response.json() as Promise<CompilerResult>;
+}

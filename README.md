@@ -1,164 +1,145 @@
-# clangd browser runtime
+# clangd in the browser
 
-This project packages Monaco and the WebAssembly build of clangd as a reusable browser component. It creates an editor only inside the element supplied by the host page; it does not use an iframe, register a service worker, replace page-level DOM, or own Run/output UI.
+This package turns ordinary `<codeblock>` tags into editable, runnable C++ examples. It starts with a small textarea editor, upgrades to Monaco when the main bundle is ready, and runs a WebAssembly build of clangd for code help. Multiple blocks on one page share the same runtime, worker, and clangd download.
 
-## Use the hosted runtime
+## Add a code block
 
-The preferred deployment uses separate origins:
-
-```text
-https://www.example.com/       host page
-https://clangd.example.com/    contents of dist/
-```
-
-The host can be ordinary HTML and JavaScript:
+Copy the complete contents of `dist/` to one public directory, then include one stylesheet and one classic script:
 
 ```html
-<div class="editor-shell">
-  <textarea id="fallback">int main() { return 0; }</textarea>
-  <div id="monaco-host"></div>
-</div>
+<link rel="stylesheet" href="./codeblocks.css" />
+<script src="./codeblocks.js"></script>
 
-<script type="module">
-  const fallback = document.querySelector("#fallback");
-  const host = document.querySelector("#monaco-host");
-  const { createCppEditor } =
-    await import("https://clangd.example.com/editor.js");
+<codeblock compiler="gsnapshot" args="-std=c++26 -freflection">
+#include &lt;print&gt;
+int main() {
+    std::println("foo {} bar", 42);
+}
+</codeblock>
+```
 
-  const editor = await createCppEditor({
-    element: host,
-    value: fallback.value,
+Angle brackets in source code must use normal HTML escaping, such as `&lt;print&gt;`, because the code is embedded in an HTML document.
+
+Add as many `<codeblock>` elements as needed. Tags inserted later are upgraded automatically. Monaco, clangd, and the WebAssembly file are initialized once per page.
+
+A block can also contain multiple tabbed sources:
+
+```html
+<codeblock compiler="clang2110" args="-std=c++23" height="360px">
+  <codeblock-tab name="first.cpp">
+int main() { return 1; }
+  </codeblock-tab>
+  <codeblock-tab name="second.cpp">
+int main() { return 2; }
+  </codeblock-tab>
+</codeblock>
+```
+
+Each tab keeps its own source. Run compiles the active tab. Use separate `<codeblock>` elements when examples need different compiler settings.
+
+Supported attributes are:
+
+- `compiler`: Compiler Explorer compiler ID, defaulting to `clang2110`.
+- `args`: arguments sent unchanged to Compiler Explorer.
+- `theme`: `auto`, `light`, or `dark`.
+- `debug`: show the basic/full editor and light/dark switches. These are hidden by default.
+- `status`: show the optional user-facing code-help status.
+- `width`: any valid CSS width for the complete block.
+- `height`: any valid CSS height for the editor area, such as `280px`, `40vh`, or `clamp(240px, 50vh, 600px)`.
+- `min-height`: any valid CSS minimum height for the editor area.
+
+## JavaScript API
+
+`codeblocks.js` creates `globalThis.CodeBlocks` immediately. Its `ready` promise resolves after the module API has loaded:
+
+```html
+<script>
+  CodeBlocks.configure({
     theme: "dark",
-    onStatus(status) {
-      console.log(status);
+    editorOptions: {
+      fontSize: 15,
+      wordWrap: "on",
+    },
+    styles: {
+      "editor-height": "360px",
+      "accent": "#7c3aed",
     },
   });
 
-  // Capture edits made while Monaco loaded, then swap only the editor nodes.
-  editor.setValue(fallback.value);
-  host.style.visibility = "visible";
-  editor.layout();
-  fallback.remove();
-
-  await editor.clangdReady;
+  CodeBlocks.ready.then(() => {
+    const element = document.querySelector("codeblock");
+    const block = CodeBlocks.get(element);
+    block.setValue("int main() { return 0; }");
+  });
 </script>
 ```
 
-`createCppEditor()` resolves as soon as Monaco is usable. clangd downloads and starts independently; `editor.clangdReady` resolves after the language client connects and rejects if clangd is unavailable. A missing cross-origin-isolation policy affects clangd only; Monaco remains usable.
+Call `CodeBlocks.configure(options)` before a block is upgraded to set defaults for later blocks. The available options are `theme`, `showDebugControls`, `showStatus`, `compiler`, `args`, `compilerExplorerUrl`, `editorOptions`, `styles`, and `onStatus`.
 
-The returned component API is:
+`CodeBlocks.get(element)` returns the upgraded block instance. It exposes `getValue`, `setValue`, `getTabs`, `selectTab`, `focus`, `run`, `setTheme`, `dispose`, `onDidChange`, `editorReady`, `monacoReady`, and `clangdReady`. `getValue` and `setValue` act on the active tab. `monacoReady` resolves to the underlying Monaco standalone editor for integrations that need the native editor API.
 
-```js
-editor.getValue();
-editor.setValue(source);
-editor.focus();
-editor.layout();
-editor.dispose();
-const unsubscribe = editor.onDidChange((source) => {});
-await editor.clangdReady;
+Styling uses CSS custom properties. Common properties include:
+
+```css
+codeblock {
+  width: min(100%, 900px);
+  --codeblocks-editor-height: 360px;
+  --codeblocks-editor-min-height: 120px;
+  --codeblocks-editor-height-mobile: 300px;
+  --codeblocks-accent: #7c3aed;
+  --codeblocks-border: #475569;
+}
 ```
 
-### Lightweight fallback
+The editor observes its container and relayouts whenever its width or height changes, including flexbox, grid, responsive, and script-driven resizing.
 
-The fallback editor is a separate, small public module and does not load Monaco:
+The lower-level ES module entries remain available as `editor.js`, `fallback.js`, and `ansi.js`.
 
-```js
-const { createCppFallbackEditor } =
-  await import("https://clangd.example.com/fallback.js");
+## Cross-origin isolation
 
-const fallback = createCppFallbackEditor({
-  element: document.querySelector(".fallback-host"),
-  value: "int main() { return 0; }",
-});
+clangd uses WebAssembly threads and therefore requires `crossOriginIsolated === true`. The preferred deployment sends these response headers for the document and same-origin runtime files:
 
-fallback.getValue();
-fallback.setValue("int main() { return 1; }");
-fallback.focus();
-const unsubscribe = fallback.onDidChange((source) => {});
-fallback.dispose();
-```
-
-`fallback.js` contains its scoped styles, native textarea overlay, line numbers, scrolling synchronization, and lightweight C++ syntax highlighter. It can also enhance an existing textarea inside the supplied element, preserving source included in the initial HTML.
-
-### ANSI output
-
-ANSI SGR rendering is available from the main entry and as a lightweight standalone module:
-
-```js
-const { appendAnsi, ansiToFragment, stripAnsi } =
-  await import("https://clangd.example.com/ansi.js");
-
-appendAnsi(outputElement, compilerOutput);
-appendAnsi(outputElement, stderr, { className: "stderr" });
-```
-
-The renderer creates text nodes and styled spans rather than injecting HTML. The same functions are also exported by `editor.js`.
-
-Status events have a `type` of `monaco-loading`, `monaco-ready`, `clangd-downloading`, `clangd-starting`, `clangd-ready`, or `clangd-error`. Download events also contain `loaded` and, when the server provides it, `total` bytes.
-
-## Headers
-
-The host document must be cross-origin isolated for clangd's SharedArrayBuffer/pthread build:
-
-```http
+```text
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp
 ```
 
-The runtime asset server must make its public modules, workers, CSS, and WASM available cross-origin:
+The reusable loader does not register a service worker by default. Hosts such as GitHub Pages that cannot set these headers can explicitly opt into the included helper:
 
-```http
-Access-Control-Allow-Origin: *
-Cross-Origin-Resource-Policy: cross-origin
+```html
+<script
+  src="./codeblocks.js"
+  data-coi-serviceworker="./coi-serviceworker.js"
+></script>
 ```
 
-Serve `.wasm` as `application/wasm`. [public/_headers](public/_headers) is an example configuration for static hosts that support Netlify-style header files.
+That opt-in registers a host-owned service worker and reloads once. Do not use the attribute when the server already sends the headers.
 
-The cross-origin worker bootstrap uses Blob module workers. A restrictive host Content Security Policy therefore needs at least:
+If assets are hosted on another origin, that origin must allow CORS and send `Cross-Origin-Resource-Policy: cross-origin` or an equivalent policy accepted by the embedding page.
 
-```http
-Content-Security-Policy: worker-src blob:; script-src 'self' https://clangd.example.com blob:
-```
+## Build and test
 
-Adjust the runtime origin and the rest of the policy for the site. The runtime never registers a service worker or attempts to change the host's COOP/COEP policy. GitHub Pages users need a fronting service capable of setting these headers, or a COI service-worker solution managed by the host site itself.
-
-## Self-host the same package
-
-Extract the archive without rebuilding:
-
-```bash
-mkdir -p assets/clangd
-tar xf clangd-browser-runtime.tar.gz -C assets/clangd
-```
-
-Then import the exact same distribution from the host origin:
-
-```js
-const { createCppEditor } = await import("/assets/clangd/editor.js");
-```
-
-All resource URLs are relative to emitted modules, so the distribution works at the origin root or any directory such as `/assets/clangd/`.
-
-## Build and package
-
-Normal frontend builds use prebuilt artifacts and never clone or compile LLVM:
+The repository already contains the prebuilt clangd artifacts in `public/wasm`. Front-end changes do not rebuild LLVM or clangd.
 
 ```bash
 pnpm install
 pnpm build
+pnpm demo:origins
+```
+
+Open `http://localhost:4173/`. The example includes `debug`, so both visual editor and theme switches are shown.
+
+Run the browser suite in another terminal:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:browser
+```
+
+Create a deployable archive with:
+
+```bash
 pnpm pack:runtime
 ```
 
-The build produces stable `dist/editor.js`, `dist/fallback.js`, `dist/ansi.js`, `dist/editor.css`, internal chunks in `dist/assets/`, and the complete Emscripten artifact set in `dist/wasm/`. Packaging creates `clangd-browser-runtime.tar.gz`.
-
-Install an existing artifact directory or archive with:
-
-```bash
-./scripts/install-clangd-artifacts path/to/clangd-artifacts.tar.gz
-```
-
-The input must contain `clangd.js`, `clangd.wasm`, and any other `clangd*` files produced by Emscripten. `build.sh` remains a separate manual reference workflow and is not invoked by `pnpm build` or CI.
-
-## Compiler Explorer Run UI
-
-Compilation is intentionally a host concern. The demo keeps an `activeEditor.getValue()` abstraction that initially reads the textarea and later points to Monaco, then sends that source directly to the Compiler Explorer API. This makes Run independent of both Monaco and clangd readiness.
+The output is `clangd-browser-runtime.tar.gz`. It includes the main code-block files, lower-level entries, internal chunks, and prebuilt WebAssembly artifacts.
