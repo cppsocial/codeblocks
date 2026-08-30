@@ -21,6 +21,8 @@ codeblock,
   background: var(--codeblocks-panel);
   color: var(--codeblocks-foreground);
   font-family: system-ui, sans-serif;
+  font-size: 14px;
+  line-height: normal;
 }
 
 .codeblocks-root[data-theme="light"] {

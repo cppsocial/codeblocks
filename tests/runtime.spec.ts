@@ -227,6 +227,16 @@ test("overflow widgets are not clipped by the code block", async ({ page }) => {
   )).toBe("visible");
 });
 
+test("host typography does not leak into Monaco UI widgets", async ({ page }) => {
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });
+  await page.locator("body").evaluate((element) => {
+    element.style.font = "32px/2 serif";
+  });
+  await expect(page.locator("codeblock")).toHaveCSS("font-size", "14px");
+  await expect(page.locator(".overflowingContentWidgets")).toHaveCSS("font-size", "14px");
+});
+
 test("tabs preserve independent sources and arbitrary container sizes relayout", async ({ page }) => {
   await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
   await expect(page.locator("codeblock")).toHaveClass(/codeblocks-root/);
