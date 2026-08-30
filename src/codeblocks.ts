@@ -6,11 +6,39 @@ import "./codeblocks.css";
 
 export type CodeBlockTheme = "auto" | "light" | "dark";
 
+export interface CompilerExplorerFilters {
+  binary: boolean;
+  binaryObject: boolean;
+  commentOnly: boolean;
+  demangle: boolean;
+  directives: boolean;
+  execute: boolean;
+  intel: boolean;
+  labels: boolean;
+  libraryCode: boolean;
+  trim: boolean;
+  debugCalls: boolean;
+}
+
+export interface CompilerExplorerConfiguration {
+  baseUrl?: string;
+  language?: string;
+  compiler?: string;
+  options?: string;
+  filters?: Partial<CompilerExplorerFilters>;
+  libs?: unknown[];
+  specialoutputs?: string[];
+  tools?: unknown[];
+  overrides?: unknown[];
+}
+
 export interface CodeBlocksConfiguration {
   theme?: CodeBlockTheme;
   showDebugControls?: boolean;
   compiler?: string;
   args?: string;
+  compilerExplorer?: CompilerExplorerConfiguration;
+  /** @deprecated Use compilerExplorer.baseUrl. */
   compilerExplorerUrl?: string;
   editorOptions?: MonacoEditor.IStandaloneEditorConstructionOptions;
   styles?: Record<string, string>;
@@ -27,6 +55,7 @@ export interface CodeBlock {
   setValue(value: string): void;
   getTabs(): Array<{ name: string; value: string }>;
   selectTab(tab: string | number): void;
+  getCompilerExplorerUrl(): string;
   focus(): void;
   run(): Promise<void>;
   setTheme(theme: CodeBlockTheme): Promise<void>;
@@ -111,10 +140,10 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   themeToggle.dataset.themeToggle = "";
   debugControls.append(editorToggle, themeToggle);
   const compilerLink = document.createElement("a");
-  compilerLink.href = options.compilerExplorerUrl ?? "https://compiler-explorer.com/";
+  compilerLink.className = "codeblocks-compiler-link";
   compilerLink.target = "_blank";
   compilerLink.rel = "noopener";
-  compilerLink.textContent = "Open in Compiler Explorer";
+  compilerLink.append("View on Compiler Explorer", externalLinkIcon());
   toolbar.append(runButton, debugControls, compilerLink);
 
   const outputDrawer = document.createElement("section");
@@ -157,6 +186,7 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   let lastLoggedDownload = -1;
   const changeListeners = new Set<(value: string) => void>();
   let unsubscribeActive = fallback.onDidChange(notifyChange);
+  compilerLink.href = getCompilerExplorerUrl();
 
   let resolveClangd!: () => void;
   let rejectClangd!: (error: unknown) => void;
@@ -167,6 +197,9 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   void clangdReady.catch(() => {});
 
   runButton.addEventListener("click", run);
+  compilerLink.addEventListener("click", updateCompilerExplorerLink);
+  compilerLink.addEventListener("pointerdown", updateCompilerExplorerLink);
+  compilerLink.addEventListener("focus", updateCompilerExplorerLink);
   editorToggle.addEventListener("click", toggleEditor);
   themeToggle.addEventListener("click", toggleTheme);
   const media = matchMedia("(prefers-color-scheme: dark)");
@@ -323,6 +356,18 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
     changeListeners.forEach((listener) => listener(value));
   }
 
+  function getCompilerExplorerUrl(): string {
+    return createCompilerExplorerUrl(
+      activeEditor.getValue(),
+      tabs[activeTab].name,
+      options,
+    );
+  }
+
+  function updateCompilerExplorerLink(): void {
+    compilerLink.href = getCompilerExplorerUrl();
+  }
+
   function selectTab(tab: string | number): void {
     const index = typeof tab === "number"
       ? tab
@@ -350,6 +395,7 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
       value: index === activeTab ? activeEditor.getValue() : tab.value,
     })),
     selectTab,
+    getCompilerExplorerUrl,
     focus: () => activeEditor.focus(),
     run,
     setTheme,
@@ -357,6 +403,9 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
       if (disposed) return;
       disposed = true;
       runButton.removeEventListener("click", run);
+      compilerLink.removeEventListener("click", updateCompilerExplorerLink);
+      compilerLink.removeEventListener("pointerdown", updateCompilerExplorerLink);
+      compilerLink.removeEventListener("focus", updateCompilerExplorerLink);
       editorToggle.removeEventListener("click", toggleEditor);
       themeToggle.removeEventListener("click", toggleTheme);
       media.removeEventListener("change", systemThemeChanged);
@@ -397,6 +446,10 @@ function upgradeWithin(root: ParentNode): void {
       showDebugControls: element.hasAttribute("debug") || configuration.showDebugControls,
       compiler: element.getAttribute("compiler") ?? configuration.compiler,
       args: element.getAttribute("args") ?? configuration.args,
+      compilerExplorer: compilerExplorerAttributes(
+        element,
+        configuration.compilerExplorer,
+      ),
     });
     instances.set(element, instance);
   }
@@ -429,12 +482,64 @@ function attributeTheme(element: HTMLElement): CodeBlockTheme | undefined {
   return value === "auto" || value === "light" || value === "dark" ? value : undefined;
 }
 
+function compilerExplorerAttributes(
+  element: HTMLElement,
+  configured: CompilerExplorerConfiguration | undefined,
+): CompilerExplorerConfiguration | undefined {
+  const baseUrl = element.getAttribute("ce-url");
+  const language = element.getAttribute("ce-language");
+  const compiler = element.getAttribute("ce-compiler");
+  const options = element.getAttribute("ce-options");
+  const filters = jsonAttribute<Partial<CompilerExplorerFilters>>(
+    element,
+    "ce-filters",
+  );
+  if (!configured && !baseUrl && !language && !compiler && !options && !filters) {
+    return undefined;
+  }
+  return {
+    ...configured,
+    ...(baseUrl && { baseUrl }),
+    ...(language && { language }),
+    ...(compiler && { compiler }),
+    ...(options && { options }),
+    filters: { ...configured?.filters, ...filters },
+  };
+}
+
+function jsonAttribute<T>(element: HTMLElement, name: string): T | undefined {
+  const value = element.getAttribute(name);
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch (error) {
+    throw new SyntaxError(
+      `${name} must contain valid JSON: ${errorMessage(error)}`,
+    );
+  }
+}
+
 function button(label: string, secondary = false): HTMLButtonElement {
   const element = document.createElement("button");
   element.type = "button";
   element.textContent = label;
   if (secondary) element.className = "codeblocks-secondary";
   return element;
+}
+
+function externalLinkIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M9 2h5v5M14 2 7.5 8.5M12 9.5V14H2V4h4.5");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  path.setAttribute("stroke-width", "1.5");
+  svg.append(path);
+  return svg;
 }
 
 function resolveTheme(theme: CodeBlockTheme): "light" | "dark" {
@@ -479,6 +584,70 @@ function logStatus(event: EditorStatus): void {
 
 function formatMegabytes(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1);
+}
+
+const DEFAULT_COMPILER_EXPLORER_FILTERS: CompilerExplorerFilters = {
+  binary: false,
+  binaryObject: false,
+  commentOnly: true,
+  demangle: true,
+  directives: true,
+  execute: false,
+  intel: true,
+  labels: true,
+  libraryCode: false,
+  trim: false,
+  debugCalls: false,
+};
+
+function createCompilerExplorerUrl(
+  source: string,
+  filename: string,
+  options: CreateCodeBlockOptions,
+): string {
+  const explorer = options.compilerExplorer ?? {};
+  const compiler = explorer.compiler ?? options.compiler ?? "clang2110";
+  const compilerOptions = explorer.options ?? options.args ??
+    "-std=c++2c -Wall -Wextra -pedantic-errors";
+  const state = {
+    sessions: [{
+      id: 1,
+      language: explorer.language ?? "c++",
+      source,
+      filename,
+      compilers: [{
+        id: compiler,
+        options: compilerOptions,
+        filters: {
+          ...DEFAULT_COMPILER_EXPLORER_FILTERS,
+          ...explorer.filters,
+        },
+        libs: explorer.libs ?? [],
+        specialoutputs: explorer.specialoutputs ?? [],
+        tools: explorer.tools ?? [],
+        overrides: explorer.overrides ?? [],
+      }],
+      executors: [],
+    }],
+    trees: [],
+  };
+  const baseUrl = new URL(
+    explorer.baseUrl ?? options.compilerExplorerUrl ?? "https://godbolt.org/",
+  );
+  if (!baseUrl.pathname.endsWith("/")) baseUrl.pathname += "/";
+  return new URL(`clientstate/${base64Url(JSON.stringify(state))}`, baseUrl).href;
+}
+
+function base64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 interface CompilerLine { text: string }

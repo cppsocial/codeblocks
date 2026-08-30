@@ -60,6 +60,48 @@ test("fallback and Run work before the full editor loads", async ({ page }) => {
   expect(source).toContain("before upgrade");
 });
 
+test("Compiler Explorer link carries the active client state and is right aligned", async ({ page }) => {
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("codeblock")).toHaveClass(/codeblocks-root/);
+  const result = await page.evaluate(() => {
+    const element = document.querySelector<HTMLElement>("codeblock")!;
+    const block = (globalThis as any).CodeBlocks.get(element);
+    block.setValue("int linked_value = 42;");
+    const link = element.querySelector<HTMLAnchorElement>(".codeblocks-compiler-link")!;
+    link.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    link.click();
+    const url = new URL(link.href);
+    const encoded = url.pathname.split("/clientstate/")[1];
+    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/") +
+      "=".repeat((4 - encoded.length % 4) % 4);
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const state = JSON.parse(new TextDecoder().decode(bytes));
+    const toolbar = element.querySelector(".codeblocks-toolbar")!.getBoundingClientRect();
+    const linkBox = link.getBoundingClientRect();
+    return {
+      origin: url.origin,
+      state,
+      rightGap: Math.round(toolbar.right - linkBox.right),
+      background: getComputedStyle(link).backgroundColor,
+      target: link.target,
+    };
+  });
+  expect(result.origin).toBe("https://godbolt.org");
+  expect(result.state.sessions[0]).toMatchObject({
+    language: "c++",
+    source: "int linked_value = 42;",
+    filename: "main.cpp",
+    compilers: [{
+      id: "gsnapshot",
+      options: "-std=c++26 -freflection",
+      filters: { intel: false, demangle: true },
+    }],
+  });
+  expect(result.rightGap).toBe(12);
+  expect(result.background).toBe("rgb(103, 197, 42)");
+  expect(result.target).toBe("_blank");
+});
+
 test("editor switch has matching surfaces and explicit themes", async ({ page }) => {
   await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 60_000 });

@@ -134,6 +134,33 @@ codeblock,
 .codeblocks-root button:disabled { opacity: .65; cursor: wait; }
 .codeblocks-root a { color: var(--codeblocks-link); text-decoration: none; }
 .codeblocks-root a:hover { text-decoration: underline; }
+.codeblocks-root .codeblocks-compiler-link {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  border: 1px solid #57ae20;
+  border-radius: 5px;
+  padding: 5px 10px;
+  background: #67c52a;
+  color: #102600;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+.codeblocks-root .codeblocks-compiler-link:hover {
+  border-color: #71d832;
+  background: #71d832;
+  color: #0b1d00;
+  text-decoration: none;
+}
+.codeblocks-compiler-link svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
 .codeblocks-debug { display: inline-flex; gap: 8px; }
 .codeblocks-debug[hidden] { display: none; }
 .codeblocks-output {

@@ -26,7 +26,12 @@
     <main>
       <h1>C++ code blocks</h1>
       <p>Edit and run this example in your browser.</p>
-      <codeblock compiler="gsnapshot" args="-std=c++26 -freflection" debug>
+      <codeblock
+        compiler="gsnapshot"
+        args="-std=c++26 -freflection"
+        ce-filters='{"intel":false}'
+        debug
+      >
         <codeblock-tab name="main.cpp">
 #include &lt;print&gt;
 int main() {

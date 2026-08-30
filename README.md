@@ -41,6 +41,11 @@ Supported attributes are:
 
 - `compiler`: Compiler Explorer compiler ID, defaulting to `clang2110`.
 - `args`: arguments sent unchanged to Compiler Explorer.
+- `ce-url`: Compiler Explorer base URL, defaulting to `https://godbolt.org/`.
+- `ce-language`: language stored in the Compiler Explorer client state, defaulting to `c++`.
+- `ce-compiler`: override the linked Compiler Explorer compiler without changing Run.
+- `ce-options`: override the linked Compiler Explorer arguments without changing Run.
+- `ce-filters`: JSON object overriding Compiler Explorer output filters, such as `'{"intel":false,"demangle":true}'`.
 - `theme`: `auto`, `light`, or `dark`.
 - `debug`: show the basic/full editor and light/dark switches. These are hidden by default.
 - `width`: any valid CSS width for the complete block.
@@ -73,9 +78,33 @@ Supported attributes are:
 </script>
 ```
 
-Call `CodeBlocks.configure(options)` before a block is upgraded to set defaults for later blocks. The available options are `theme`, `showDebugControls`, `compiler`, `args`, `compilerExplorerUrl`, `editorOptions`, `styles`, and `onStatus`.
+Call `CodeBlocks.configure(options)` before a block is upgraded to set defaults for later blocks. The available options are `theme`, `showDebugControls`, `compiler`, `args`, `compilerExplorer`, `editorOptions`, `styles`, and `onStatus`.
 
-`CodeBlocks.get(element)` returns the upgraded block instance. It exposes `getValue`, `setValue`, `getTabs`, `selectTab`, `focus`, `run`, `setTheme`, `dispose`, `onDidChange`, `editorReady`, `monacoReady`, and `clangdReady`. `getValue` and `setValue` act on the active tab. `monacoReady` resolves to the underlying Monaco standalone editor for integrations that need the native editor API.
+The Compiler Explorer link contains the active source, filename, compiler, arguments, and output filters in its `/clientstate/` URL. No upload or short-link request is needed. Client-state fields can be overridden globally or when creating an individual block:
+
+```js
+CodeBlocks.configure({
+  compilerExplorer: {
+    baseUrl: "https://godbolt.org/",
+    language: "c++",
+    compiler: "gsnapshot",
+    options: "-std=c++26 -O2",
+    filters: {
+      intel: false,
+      demangle: true,
+      commentOnly: false,
+    },
+    libs: [],
+    specialoutputs: [],
+    tools: [],
+    overrides: [],
+  },
+});
+```
+
+The legacy `compilerExplorerUrl` JavaScript option remains available as an alias for `compilerExplorer.baseUrl`.
+
+`CodeBlocks.get(element)` returns the upgraded block instance. It exposes `getValue`, `setValue`, `getTabs`, `selectTab`, `getCompilerExplorerUrl`, `focus`, `run`, `setTheme`, `dispose`, `onDidChange`, `editorReady`, `monacoReady`, and `clangdReady`. `getValue` and `setValue` act on the active tab. `monacoReady` resolves to the underlying Monaco standalone editor for integrations that need the native editor API.
 
 Styling uses CSS custom properties. Common properties include:
 
