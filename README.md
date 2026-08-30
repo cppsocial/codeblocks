@@ -183,3 +183,27 @@ pnpm pack:runtime
 ```
 
 The output is `clangd-browser-runtime.tar.gz`. It includes the main code-block files, lower-level entries, internal chunks, and prebuilt WebAssembly artifacts.
+
+## Release clangd artifacts
+
+The Pages workflow downloads `clangd.js`, `clangd.wasm`, and `SHA256SUMS` from the newest published repository release whose tag identifies it as a clangd WebAssembly release:
+
+```text
+clangd-wasm/<release-id>
+```
+
+To publish the artifacts currently in `public/wasm`, install and authenticate the GitHub CLI and run this locally:
+
+```bash
+pnpm release:wasm
+```
+
+The default release ID is a UTC timestamp. An explicit ID can be supplied when a recognizable version is preferable:
+
+```bash
+pnpm release:wasm -- llvm-22.0.0
+```
+
+The script validates both artifacts, creates `SHA256SUMS`, targets the current commit, and refuses duplicate release tags. CI only downloads the latest repository-wide release in the `clangd-wasm/` tag namespace; it does not create or build releases.
+
+The repository is read from the `origin` GitHub remote and passed explicitly to `gh`. If the remote is named differently or does not use a standard GitHub URL, set `GH_REPO=owner/repository` when running the command.

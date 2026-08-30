@@ -9,6 +9,7 @@
     "watch": "tsc -w",
     "build": "pnpm run clean && tsc && vite build && node scripts/copy-runtime-assets.mjs",
     "pack:runtime": "pnpm build && bash scripts/package-runtime.sh",
+    "release:wasm": "bash scripts/release-clangd-wasm.sh",
     "demo:origins": "node scripts/serve-test.mjs",
     "test:browser": "playwright test"
   },
