@@ -4,14 +4,17 @@ import getThemeServiceOverride from "@codingame/monaco-vscode-theme-service-over
 import "@codingame/monaco-vscode-theme-defaults-default-extension";
 import "@codingame/monaco-vscode-cpp-default-extension";
 import { Uri } from "vscode";
-import { BrowserMessageReader, BrowserMessageWriter } from "vscode-languageclient/browser";
+import {
+  BrowserMessageReader,
+  BrowserMessageWriter,
+} from "vscode-languageclient/browser";
 import {
   LanguageClientConfig,
   MonacoEditorLanguageClientWrapper,
   UserConfig,
 } from "monaco-editor-wrapper";
 import editorWorkerUrl from "monaco-editor/esm/vs/editor/editor.worker?worker&url";
-import { editor as monacoEditorApi } from "monaco-editor";
+import { editor as monacoEditorApi, Range } from "monaco-editor";
 import type { editor as MonacoEditor } from "monaco-editor";
 import { FILE_PATH, LANGUAGE_ID, WORKSPACE_PATH } from "../../clangd/config";
 import { EditorStatus, startClangd, StatusReporter } from "../../clangd/client";
@@ -19,21 +22,29 @@ import { createRemoteModuleWorker } from "../../clangd/worker-bootstrap";
 import "./runtime.css";
 
 export type { EditorStatus } from "../../clangd/client";
-export { ansiToFragment, appendAnsi, stripAnsi } from "../../terminal/ansi";
+export { ansiToFragment, appendAnsi, stripAnsi } from "../../ansi";
 
 export interface CreateCppEditorOptions {
   element: HTMLElement;
   value?: string;
+  language?: string;
+  filename?: string;
+  readOnly?: boolean;
   theme?: "light" | "dark";
   editorOptions?: MonacoEditor.IStandaloneEditorConstructionOptions;
   onStatus?: (status: EditorStatus) => void;
+  workspaceFiles?: Array<{ filename: string; contents: string }>;
 }
 
 export interface CppEditor {
   getValue(): string;
   setValue(value: string): void;
+  setLanguage(language: string): void;
   focus(): void;
   layout(): void;
+  highlightSourceLine(line?: number): void;
+  setHighlightedLines(lines: number[]): void;
+  onDidHoverSourceLine(callback: (line?: number) => void): () => void;
   getMonacoEditor(): MonacoEditor.IStandaloneCodeEditor;
   setTheme(theme: "light" | "dark"): Promise<void>;
   dispose(): void;
@@ -48,6 +59,7 @@ interface SharedRuntime {
   clangdReady: Promise<void>;
   reporters: Set<StatusReporter>;
   lastClangdStatus?: EditorStatus;
+  setWorkspaceFiles(files: Array<{ filename: string; contents: string }>): void;
 }
 
 interface SharedRuntimeSlot {
@@ -59,9 +71,13 @@ const noop: StatusReporter = () => {};
 let sharedSlot: SharedRuntimeSlot | undefined;
 let editorSequence = 0;
 
-export async function createCppEditor(options: CreateCppEditorOptions): Promise<CppEditor> {
+export async function createCppEditor(
+  options: CreateCppEditorOptions,
+): Promise<CppEditor> {
   if (!(options.element instanceof HTMLElement)) {
-    throw new TypeError("createCppEditor requires an HTMLElement in options.element");
+    throw new TypeError(
+      "createCppEditor requires an HTMLElement in options.element",
+    );
   }
 
   const report = options.onStatus ?? noop;
@@ -74,10 +90,12 @@ export async function createCppEditor(options: CreateCppEditorOptions): Promise<
       reporters,
       promise: Promise.resolve(undefined as never),
     };
-    slot.promise = initializeSharedRuntime(options, reporters).catch((error) => {
-      if (sharedSlot === slot) sharedSlot = undefined;
-      throw error;
-    });
+    slot.promise = initializeSharedRuntime(options, reporters).catch(
+      (error) => {
+        if (sharedSlot === slot) sharedSlot = undefined;
+        throw error;
+      },
+    );
     sharedSlot = slot;
   } else {
     sharedSlot.reporters.add(report);
@@ -92,6 +110,7 @@ export async function createCppEditor(options: CreateCppEditorOptions): Promise<
   }
 
   if (shared.lastClangdStatus && !isPrimary) report(shared.lastClangdStatus);
+  shared.setWorkspaceFiles(options.workspaceFiles ?? []);
 
   const staging = isPrimary
     ? shared.primaryStaging
@@ -101,15 +120,28 @@ export async function createCppEditor(options: CreateCppEditorOptions): Promise<
 
   if (isPrimary) {
     editor = shared.primaryEditor;
+    const primaryModel = editor.getModel();
+    if (primaryModel) {
+      monacoEditorApi.setModelLanguage(
+        primaryModel,
+        monacoLanguage(options.language),
+      );
+    }
   } else {
     model = monacoEditorApi.createModel(
       options.value ?? "",
-      LANGUAGE_ID,
-      Uri.file(`/home/web_user/codeblock-${++editorSequence}.cpp`),
+      monacoLanguage(options.language),
+      Uri.file(modelPath(options.filename, ++editorSequence)),
     );
     editor = monacoEditorApi.create(staging, {
       ...defaultEditorOptions(options.theme ?? "dark"),
       ...options.editorOptions,
+      scrollbar: {
+        ...defaultEditorOptions(options.theme ?? "dark").scrollbar,
+        ...options.editorOptions?.scrollbar,
+        alwaysConsumeMouseWheel: false,
+      },
+      readOnly: options.readOnly ?? options.editorOptions?.readOnly,
       model,
       theme: options.theme === "light" ? "vs" : "vs-dark",
     });
@@ -117,17 +149,79 @@ export async function createCppEditor(options: CreateCppEditorOptions): Promise<
   }
 
   report({ type: "monaco-ready" });
+  const sourceHighlight = editor.createDecorationsCollection();
+  const persistentHighlights = editor.createDecorationsCollection();
   let disposed = false;
   return {
     getValue: () => editor.getValue(),
     setValue: (value) => editor.setValue(value),
+    setLanguage(language) {
+      const currentModel = editor.getModel();
+      if (currentModel)
+        monacoEditorApi.setModelLanguage(
+          currentModel,
+          monacoLanguage(language),
+        );
+    },
     focus: () => editor.focus(),
     layout: () => editor.layout(),
+    highlightSourceLine(line) {
+      const currentModel = editor.getModel();
+      const lineCount = currentModel?.getLineCount() ?? 0;
+      sourceHighlight.set(
+        line && line >= 1 && line <= lineCount
+          ? [
+              {
+                range: new Range(
+                  line,
+                  1,
+                  line,
+                  currentModel!.getLineMaxColumn(line),
+                ),
+                options: {
+                  isWholeLine: true,
+                  shouldFillLineOnLineBreak: true,
+                  className: "codeblocks-source-highlight",
+                },
+              },
+            ]
+          : [],
+      );
+    },
+    setHighlightedLines(lines) {
+      const currentModel = editor.getModel();
+      const lineCount = currentModel?.getLineCount() ?? 0;
+      persistentHighlights.set(
+        lines
+          .filter((line) => line >= 1 && line <= lineCount)
+          .map((line) => ({
+            range: new Range(
+              line,
+              1,
+              line,
+              currentModel!.getLineMaxColumn(line),
+            ),
+            options: {
+              isWholeLine: true,
+              shouldFillLineOnLineBreak: true,
+              className: "codeblocks-persistent-line-highlight",
+            },
+          })),
+      );
+    },
+    onDidHoverSourceLine(callback) {
+      const subscription = editor.onMouseMove((event) =>
+        callback(event.target.position?.lineNumber),
+      );
+      return () => subscription.dispose();
+    },
     getMonacoEditor: () => editor,
     async setTheme(theme) {
       staging.style.background = themeBackground(theme);
       monacoEditorApi.setTheme(theme === "light" ? "vs" : "vs-dark");
-      await shared.wrapper.getMonacoEditorApp()?.updateUserConfiguration(userConfiguration(theme));
+      await shared.wrapper
+        .getMonacoEditorApp()
+        ?.updateUserConfiguration(userConfiguration(theme));
     },
     dispose() {
       if (disposed) return;
@@ -138,7 +232,9 @@ export async function createCppEditor(options: CreateCppEditorOptions): Promise<
       staging.remove();
     },
     onDidChange(callback) {
-      const subscription = editor.onDidChangeModelContent(() => callback(editor.getValue()));
+      const subscription = editor.onDidChangeModelContent(() =>
+        callback(editor.getValue()),
+      );
       return () => subscription.dispose();
     },
     clangdReady: shared.clangdReady,
@@ -151,9 +247,13 @@ async function initializeSharedRuntime(
 ): Promise<SharedRuntime> {
   ensureStylesheet();
   const workerBootstraps = new Set<() => void>();
-  (globalThis as typeof globalThis & { MonacoEnvironment: unknown }).MonacoEnvironment = {
+  (
+    globalThis as typeof globalThis & { MonacoEnvironment: unknown }
+  ).MonacoEnvironment = {
     getWorker: () => {
-      const handle = createRemoteModuleWorker(editorWorkerUrl, { name: "monaco-editor-worker" });
+      const handle = createRemoteModuleWorker(editorWorkerUrl, {
+        name: "monaco-editor-worker",
+      });
       workerBootstraps.add(handle.disposeBootstrap);
       return handle.worker;
     },
@@ -174,7 +274,9 @@ async function initializeSharedRuntime(
       "clangd requires cross-origin isolation because its WebAssembly build uses SharedArrayBuffer/pthreads.",
     );
     broadcast({ type: "clangd-error", error });
-    isolatedFailure = new Promise<void>((_, reject) => (rejectIsolation = reject));
+    isolatedFailure = new Promise<void>(
+      (_, reject) => (rejectIsolation = reject),
+    );
     void isolatedFailure.catch(() => {});
     rejectIsolation!(error);
   }
@@ -185,6 +287,8 @@ async function initializeSharedRuntime(
     wrapper,
     primaryStaging: staging,
     reporters,
+    setWorkspaceFiles: (files: Array<{ filename: string; contents: string }>) =>
+      clangdHandle?.setWorkspaceFiles(files),
   });
 
   let languageClientConfig: LanguageClientConfig | undefined;
@@ -195,6 +299,12 @@ async function initializeSharedRuntime(
       options: { $type: "WorkerDirect", worker: clangdHandle.worker },
       clientOptions: {
         documentSelector: [LANGUAGE_ID],
+        // The WASM clangd can report include-link ranges that VS Code rejects
+        // before Monaco can validate them. Include links are not exposed by
+        // this embedded UI, so avoid registering that provider.
+        middleware: {
+          provideDocumentLinks: () => [],
+        },
         workspaceFolder: {
           index: 0,
           name: "workspace",
@@ -238,6 +348,12 @@ async function initializeSharedRuntime(
         editorOptions: {
           ...defaultEditorOptions(options.theme ?? "dark"),
           ...options.editorOptions,
+          scrollbar: {
+            ...defaultEditorOptions(options.theme ?? "dark").scrollbar,
+            ...options.editorOptions?.scrollbar,
+            alwaysConsumeMouseWheel: false,
+          },
+          readOnly: options.readOnly ?? options.editorOptions?.readOnly,
           theme: options.theme === "light" ? "vs" : "vs-dark",
         },
       },
@@ -269,7 +385,8 @@ async function initializeSharedRuntime(
           broadcast({ type: "clangd-ready" });
         })
         .catch((value: unknown) => {
-          const error = value instanceof Error ? value : new Error(String(value));
+          const error =
+            value instanceof Error ? value : new Error(String(value));
           broadcast({ type: "clangd-error", error });
           throw error;
         })
@@ -278,11 +395,28 @@ async function initializeSharedRuntime(
   return runtime;
 }
 
-function createStaging(host: HTMLElement, theme: "light" | "dark"): HTMLDivElement {
+function monacoLanguage(language = LANGUAGE_ID): string {
+  const normalized = language.toLowerCase();
+  return normalized === "c++" || normalized === "cxx"
+    ? LANGUAGE_ID
+    : normalized;
+}
+
+function modelPath(filename: string | undefined, sequence: number): string {
+  const safeName = (filename ?? `codeblock-${sequence}.cpp`).replace(
+    /[^a-zA-Z0-9._-]/g,
+    "-",
+  );
+  return `/home/web_user/${sequence}-${safeName}`;
+}
+
+function createStaging(
+  host: HTMLElement,
+  theme: "light" | "dark",
+): HTMLDivElement {
   const staging = document.createElement("div");
   staging.className = "clangd-browser-editor";
-  staging.style.cssText =
-    `position:absolute;inset:0;visibility:hidden;background:${themeBackground(theme)}`;
+  staging.style.cssText = `position:absolute;inset:0;visibility:hidden;background:${themeBackground(theme)}`;
   host.append(staging);
   return staging;
 }
@@ -305,7 +439,8 @@ function defaultEditorOptions(
 ): MonacoEditor.IStandaloneEditorConstructionOptions {
   return {
     theme: theme === "light" ? "vs" : "vs-dark",
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    fontFamily:
+      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
     fontSize: 14,
     lineHeight: 23,
     glyphMargin: false,
@@ -313,9 +448,11 @@ function defaultEditorOptions(
     lineNumbersMinChars: 3,
     lineDecorationsWidth: 6,
     minimap: { enabled: false },
+    scrollbar: { alwaysConsumeMouseWheel: false },
     padding: { top: 16, bottom: 16 },
     scrollBeyondLastLine: false,
     fixedOverflowWidgets: true,
+    links: false,
   };
 }
 

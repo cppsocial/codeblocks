@@ -15,13 +15,17 @@ export type StatusReporter = (status: EditorStatus) => void;
 export interface ClangdWorkerHandle {
   worker: Worker;
   ready: Promise<void>;
+  setWorkspaceFiles(files: Array<{ filename: string; contents: string }>): void;
   dispose(): void;
 }
 
 export function startClangd(report: StatusReporter): ClangdWorkerHandle {
-  const { worker, disposeBootstrap } = createRemoteModuleWorker(clangdWorkerUrl, {
-    name: "clangd-language-server",
-  });
+  const { worker, disposeBootstrap } = createRemoteModuleWorker(
+    clangdWorkerUrl,
+    {
+      name: "clangd-language-server",
+    },
+  );
 
   let resolveReady!: () => void;
   let rejectReady!: (error: Error) => void;
@@ -39,7 +43,7 @@ export function startClangd(report: StatusReporter): ClangdWorkerHandle {
     settled = true;
     const error =
       value instanceof ErrorEvent
-        ? value.error ?? new Error(value.message)
+        ? (value.error ?? new Error(value.message))
         : value instanceof Error
           ? value
           : new Error(String(value));
@@ -76,10 +80,14 @@ export function startClangd(report: StatusReporter): ClangdWorkerHandle {
   return {
     worker,
     ready,
+    setWorkspaceFiles(files) {
+      worker.postMessage({ type: "workspace-files", files });
+    },
     dispose() {
       worker.terminate();
       disposeBootstrap();
-      if (!settled) fail(new Error("clangd was disposed before it became ready"));
+      if (!settled)
+        fail(new Error("clangd was disposed before it became ready"));
     },
   };
 }

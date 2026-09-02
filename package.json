@@ -28,7 +28,7 @@
   },
   "scripts": {
     "clean": "node scripts/build-package.mjs --clean",
-    "dev": "pnpm build",
+    "dev": "node scripts/dev.mjs",
     "watch": "tsc -w",
     "build": "node scripts/build-package.mjs",
     "build:hosted": "node scripts/build-package.mjs --outdir=dist-hosted --without-wasm",
@@ -37,16 +37,22 @@
     "package:npm:hosted": "node scripts/prepare-npm-package.mjs dist-hosted packages/codeblocks-hosted @cppsocial/codeblocks-hosted",
     "pack:runtime": "pnpm build && bash scripts/package-runtime.sh",
     "release:wasm": "bash scripts/clangd/release-wasm.sh",
-    "demo:origins": "node scripts/serve-test.mjs",
-    "test:browser": "playwright test"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "tsc --noEmit && prettier --check .",
+    "check": "pnpm lint && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
     "@types/emscripten": "^1.39.10",
     "@types/node": "~20.12.12",
     "@types/vscode": "~1.89.0",
+    "happy-dom": "^15.11.7",
+    "prettier": "^3.6.2",
     "typescript": "^5.4.5",
-    "vite": "^5.4.8"
+    "vite": "^5.4.8",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@codingame/esbuild-import-meta-url-plugin": "~1.0.2",

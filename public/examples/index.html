@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Codeblocks feature examples</title>
+    <link rel="stylesheet" href="../codeblocks.css" />
+    <script
+      src="../codeblocks.js"
+      data-coi-serviceworker="../coi-serviceworker.js"
+      data-debug
+    ></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        background: #fff;
+        color: #1f2328;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        width: min(1180px, calc(100% - 32px));
+        margin: 48px auto;
+      }
+      section {
+        margin: 56px 0;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(28px, 5vw, 44px);
+      }
+      h2 {
+        margin-bottom: 8px;
+      }
+      p {
+        max-width: 75ch;
+        color: #59636e;
+        line-height: 1.55;
+      }
+      .page-controls {
+        display: flex;
+        gap: 8px;
+        margin: 20px 0 32px;
+      }
+      .page-controls button {
+        padding: 7px 11px;
+      }
+      .custom-output {
+        min-height: 80px;
+        padding: 12px;
+        border: 1px solid #64748b;
+        white-space: pre-wrap;
+      }
+      .custom-run {
+        margin: 8px 0;
+        padding: 7px 12px;
+      }
+      :root[data-page-theme="light"] {
+        background: #ffffff;
+        color: #1f2328;
+      }
+      :root[data-page-theme="light"] p {
+        color: #59636e;
+      }
+      :root[data-page-theme="dark"] {
+        background: #0d1117;
+        color: #e6edf3;
+      }
+      :root[data-page-theme="dark"] p {
+        color: #9da7b3;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background: #0d1117;
+          color: #e6edf3;
+        }
+        p {
+          color: #9da7b3;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Codeblocks examples</h1>
+      <p>
+        Runnable editors, clangd-backed read-only snippets, Compiler Explorer
+        output views, and consumer-rendered results.
+      </p>
+      <div class="page-controls">
+        <button data-global-editor type="button">Use simple editors</button>
+        <button data-global-theme type="button">Use dark mode</button>
+      </div>
+
+      <section>
+        <h2>Runnable with reader-editable options</h2>
+        <p>
+          The compact compiler bar discovers Compiler Explorer languages and
+          compiler display names. Execution arguments and stdin stay together in
+          its execution panel; the output tabs select the result view.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock
+          language="c++"
+          compiler="gsnapshot"
+          compiler-args="-std=c++26 -freflection"
+          run-args='"reader argument"'
+          stdin="input from the page"
+          editable-options
+          output-views="execution,compiler,assembly"
+          debug
+        >
+          <codeblock-tab name="main.cpp">
+#include &lt;iostream&gt;
+int main(int argc, char** argv) {
+    std::string input;
+    std::getline(std::cin, input);
+    std::cout &lt;&lt; argc &lt;&lt; ": " &lt;&lt; argv[1] &lt;&lt; " / " &lt;&lt; input &lt;&lt; '\n';
+}
+          </codeblock-tab>
+          <codeblock-tab name="alternate.cpp">
+#include &lt;print&gt;
+int main() { std::println("A second source tab"); }
+          </codeblock-tab>
+        </codeblock>
+      </section>
+
+      <section>
+        <h2>Live assembly beside the source</h2>
+        <p>
+          This block compiles 600 ms after edits without executing the program.
+          It can display assembly, compiler diagnostics, or a requested Compiler
+          Explorer tool result.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock
+          compiler="clang2110"
+          compiler-args="-std=c++23 -O2"
+          live="600"
+          output-position="side"
+          output-views="assembly,compiler,tool:clangtidytrunk"
+          ce-tools='[{"id":"clangtidytrunk","args":""}]'
+          height="360px"
+        >
+int square(int value) {
+    return value * value;
+}
+        </codeblock>
+      </section>
+
+      <section>
+        <h2>Live execution output</h2>
+        <p>
+          Editing this program recompiles and executes it after 600 ms. Replay
+          and Compiler Explorer actions live in the output pane instead of a
+          separate toolbar.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock
+          compiler="clang2110"
+          compiler-args="-std=c++23 -O2"
+          live="600"
+          output-position="side"
+          output-views="execution,compiler"
+          height="280px"
+        >
+#include &lt;cstdio&gt;
+int main() {
+    std::puts("Live execution");
+}
+        </codeblock>
+      </section>
+
+      <section>
+        <h2>Read-only</h2>
+        <p>
+          Read-only is an author option, not a reader-facing toggle. UI parts
+          can be hidden independently.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock
+          readonly
+          hide-run
+          hide-compiler-explorer
+          compiler-args="-std=c++23"
+          height="180px"
+        >
+#include &lt;array&gt;
+constexpr std::array values{1, 2, 3};
+        </codeblock>
+      </section>
+
+      <section>
+        <h2>Source URL, visible range, and highlighted lines</h2>
+        <p>
+          This read-only editor fetches a complete file, visibly selects lines
+          3–7, highlights lines 4–5, and still sends the complete file to the
+          compiler.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock
+          src="./sources/url-example.cpp"
+          filename="url-example.cpp"
+          range="3-7"
+          highlight-lines="4-5"
+          compiler-args="-std=c++23"
+          fit="height"
+          hide-run
+        ></codeblock>
+        <p>
+          Columns can narrow a single-line inline view too:
+          <cb src="./sources/url-example.cpp" range="9:15-9:33" simple></cb>
+        </p>
+      </section>
+
+      <section>
+        <h2>Multi-file run from URL-backed tabs</h2>
+        <p>
+          The visible source tabs and hidden header are sent in one Compiler
+          Explorer request. Switching visible tabs keeps the shared project
+          output and updates source mappings.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock
+          multi-file
+          compiler="clang2110"
+          compiler-args="-std=c++23 -O2"
+          output-views="execution,compiler,assembly"
+          height="280px"
+        >
+          <codeblock-tab name="example.cpp" src="./sources/multi-main.cpp"></codeblock-tab>
+          <codeblock-tab name="multiply.cpp" src="./sources/multiply.cpp"></codeblock-tab>
+          <codeblock-tab name="multiply.h" src="./sources/multiply.h" hidden></codeblock-tab>
+        </codeblock>
+      </section>
+
+      <section>
+        <h2>Inline highlighting with clangd</h2>
+        <p>
+          The wrapper is transparent, follows the page theme, and stays in this
+          sentence: <cb language="c++">constexpr int answer = 42;</cb> It
+          becomes a clangd-backed Monaco surface once the shared runtime is
+          ready.
+        </p>
+      </section>
+
+      <section>
+        <h2>Simple editors</h2>
+        <p>
+          <code>simple</code> keeps the syntax-only fallback permanently: Monaco
+          and clangd are never loaded for these blocks. Python is also available
+          in this mode.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock language="c++" simple readonly hide-toolbar fit="height">
+constexpr int simple_only = 42;
+        </codeblock>
+        <!-- prettier-ignore -->
+        <codeblock language="python" simple readonly hide-toolbar fit="height">
+def greet(name: str) -&gt; str:
+    return f"Hello, {name}!"
+        </codeblock>
+      </section>
+
+      <section>
+        <h2>Assembly without execution</h2>
+        <!-- prettier-ignore -->
+        <codeblock
+          output-views="compiler,assembly"
+          compiler-args="-std=c++23 -Wall"
+          height="220px"
+        >
+int answer() { return 42; }
+        </codeblock>
+      </section>
+
+      <section>
+        <h2>Consumer-controlled output</h2>
+        <p>
+          The built-in Run button, link, and output are disabled. The page calls
+          the structured API and owns presentation.
+        </p>
+        <!-- prettier-ignore -->
+        <codeblock
+          id="custom-block"
+          no-render-output
+          hide-run
+          hide-compiler-explorer
+          height="180px"
+        >
+int main() { return 0; }
+        </codeblock>
+        <button class="custom-run" id="custom-run" type="button">
+          Compile through the public API
+        </button>
+        <pre class="custom-output" id="custom-output">No result yet.</pre>
+      </section>
+    </main>
+    <script>
+      CodeBlocks.ready.then(() => {
+        let editorMode = "full";
+        let theme = matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        const editorButton = document.querySelector("[data-global-editor]");
+        const themeButton = document.querySelector("[data-global-theme]");
+        themeButton.textContent =
+          theme === "dark" ? "Use light mode" : "Use dark mode";
+        editorButton.addEventListener("click", () => {
+          editorMode = editorMode === "full" ? "simple" : "full";
+          CodeBlocks.setEditorMode(editorMode);
+          editorButton.textContent =
+            editorMode === "full" ? "Use simple editors" : "Use full editors";
+        });
+        themeButton.addEventListener("click", async () => {
+          theme = theme === "dark" ? "light" : "dark";
+          document.documentElement.dataset.pageTheme = theme;
+          await CodeBlocks.setTheme(theme);
+          themeButton.textContent =
+            theme === "dark" ? "Use light mode" : "Use dark mode";
+        });
+      });
+      document
+        .querySelector("#custom-run")
+        .addEventListener("click", async () => {
+          const output = document.querySelector("#custom-output");
+          output.textContent = "Compiling…";
+          try {
+            const block = CodeBlocks.get(
+              document.querySelector("#custom-block"),
+            );
+            const result = await block.compile();
+            output.textContent = JSON.stringify(result, null, 2);
+          } catch (error) {
+            output.textContent = String(error);
+          }
+        });
+    </script>
+  </body>
+</html>

@@ -13,7 +13,7 @@ export default defineConfig({
     lib: {
       entry: {
         editor: "src/runtime.ts",
-        fallback: "src/fallback.ts",
+        simple: "src/simple.ts",
         ansi: "src/ansi.ts",
         "codeblocks-module": "src/codeblocks-entry.ts",
       },
@@ -29,12 +29,6 @@ export default defineConfig({
             : "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
       },
-    },
-  },
-  server: {
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Cross-Origin-Resource-Policy": "cross-origin",
     },
   },
   optimizeDeps: {

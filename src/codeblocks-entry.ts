@@ -1,3 +1,3 @@
 import "./codeblocks.css";
 
-export * from "./codeblocks";
+export * from "./codeblocks/index";

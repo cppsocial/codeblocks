@@ -24,11 +24,45 @@ export interface CompilerExplorerConfiguration {
   overrides?: unknown[];
 }
 
+export interface CompilerInfo {
+  id: string;
+  name: string;
+  lang: string;
+  compilerType?: string;
+  semver?: string;
+  releaseTrack?: string;
+}
+
+export interface LanguageInfo {
+  id: string;
+  name: string;
+}
+
+export interface ToolInfo {
+  id: string;
+  name: string;
+  type: string;
+  languageId: string;
+  allowStdin?: boolean;
+}
+
+export interface CompilerExplorerFile {
+  filename: string;
+  contents: string;
+}
+
 export interface CompilerExplorerTarget {
   baseUrl: string;
   language: string;
   compiler: string;
   options: string;
+  run_args: string;
+  stdin: string;
+  filters: Partial<CompilerExplorerFilters>;
+  libraries: unknown[];
+  tools: unknown[];
+  specialoutputs: string[];
+  overrides: unknown[];
 }
 
 export interface CompilerOutputLine {
@@ -56,6 +90,26 @@ export interface CompilationResult {
   okToCache?: boolean;
 }
 
-export interface CompileRequest extends CompilerExplorerTarget {
+export interface CompileRequest extends Omit<
+  CompilerExplorerTarget,
+  | "run_args"
+  | "stdin"
+  | "filters"
+  | "libraries"
+  | "tools"
+  | "specialoutputs"
+  | "overrides"
+> {
   source: string;
+  files?: CompilerExplorerFile[];
+  buildSystem?: "cmake";
+  run_args?: string;
+  stdin?: string;
+  tools?: unknown[];
+  filters?: Partial<CompilerExplorerFilters>;
+  libraries?: unknown[];
+  specialoutputs?: string[];
+  overrides?: unknown[];
+  /** Execute after compiling. Defaults to true for backward compatibility. */
+  execute?: boolean;
 }

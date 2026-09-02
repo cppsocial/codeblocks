@@ -11,24 +11,75 @@
       data-debug
     ></script>
     <style>
-      :root { color-scheme: light dark; background: #ffffff; color: #1f2328; font-family: system-ui, sans-serif; }
-      body { margin: 0; }
-      main { width: min(900px, calc(100% - 32px)); margin: 48px auto; }
-      h1 { margin: 0 0 10px; font-size: clamp(28px, 5vw, 44px); }
-      p { margin: 0 0 24px; color: #59636e; }
+      :root {
+        color-scheme: light dark;
+        background: #ffffff;
+        color: #1f2328;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        width: min(900px, calc(100% - 32px));
+        margin: 48px auto;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(28px, 5vw, 44px);
+      }
+      p {
+        margin: 0 0 24px;
+        color: #59636e;
+      }
+      .page-controls {
+        display: flex;
+        gap: 8px;
+        margin: 0 0 18px;
+      }
+      .page-controls button {
+        padding: 7px 11px;
+      }
+      :root[data-page-theme="light"] {
+        background: #ffffff;
+        color: #1f2328;
+      }
+      :root[data-page-theme="light"] p {
+        color: #59636e;
+      }
+      :root[data-page-theme="dark"] {
+        background: #0d1117;
+        color: #e6edf3;
+      }
+      :root[data-page-theme="dark"] p {
+        color: #9da7b3;
+      }
       @media (prefers-color-scheme: dark) {
-        :root { background: #0d1117; color: #e6edf3; }
-        p { color: #9da7b3; }
+        :root {
+          background: #0d1117;
+          color: #e6edf3;
+        }
+        p {
+          color: #9da7b3;
+        }
       }
     </style>
   </head>
   <body>
     <main>
       <h1>C++ code blocks</h1>
-      <p>Edit and run this example in your browser.</p>
+      <p>
+        Edit and run this example in your browser.
+        <a href="./examples/">See every supported mode.</a>
+      </p>
+      <div class="page-controls">
+        <button data-global-editor type="button">Use simple editors</button>
+        <button data-global-theme type="button">Use dark mode</button>
+      </div>
+      <!-- prettier-ignore -->
       <codeblock
         compiler="gsnapshot"
-        args="-std=c++26 -freflection"
+        compiler-args="-std=c++26 -freflection"
         ce-filters='{"intel":false}'
         debug
       >
@@ -46,5 +97,30 @@ int main() {
         </codeblock-tab>
       </codeblock>
     </main>
+    <script>
+      CodeBlocks.ready.then(() => {
+        let editorMode = "full";
+        let theme = matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        const editorButton = document.querySelector("[data-global-editor]");
+        const themeButton = document.querySelector("[data-global-theme]");
+        themeButton.textContent =
+          theme === "dark" ? "Use light mode" : "Use dark mode";
+        editorButton.addEventListener("click", () => {
+          editorMode = editorMode === "full" ? "simple" : "full";
+          CodeBlocks.setEditorMode(editorMode);
+          editorButton.textContent =
+            editorMode === "full" ? "Use simple editors" : "Use full editors";
+        });
+        themeButton.addEventListener("click", async () => {
+          theme = theme === "dark" ? "light" : "dark";
+          document.documentElement.dataset.pageTheme = theme;
+          await CodeBlocks.setTheme(theme);
+          themeButton.textContent =
+            theme === "dark" ? "Use light mode" : "Use dark mode";
+        });
+      });
+    </script>
   </body>
 </html>

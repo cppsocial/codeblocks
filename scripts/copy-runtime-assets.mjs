@@ -1,4 +1,4 @@
-import { cp, mkdir } from "node:fs/promises";
+import { cp, mkdir, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { parseArguments, projectChild, projectRoot } from "./lib/project.mjs";
@@ -32,11 +32,18 @@ for (const [sourceFile, outputFile = sourceFile] of [
   ["public/coi-serviceworker.js", "coi-serviceworker.js"],
   ["src/loader-api.d.ts", "loader.d.ts"],
 ]) {
-  await cp(path.join(projectRoot, sourceFile), path.join(outputDirectory, outputFile));
+  await cp(
+    path.join(projectRoot, sourceFile),
+    path.join(outputDirectory, outputFile),
+  );
 }
 
-// Microlighter loads TextMate grammars on demand relative to fallback.js. C++
-// depends on the C grammar; add other modules here as language adapters land.
+await cp(
+  path.join(projectRoot, "public", "examples"),
+  path.join(outputDirectory, "examples"),
+  { recursive: true },
+);
+
 const grammarSource = path.join(
   projectRoot,
   "node_modules",
@@ -46,8 +53,11 @@ const grammarSource = path.join(
 );
 const grammarDestination = path.join(outputDirectory, "grammars");
 await mkdir(grammarDestination, { recursive: true });
+const grammars = (await readdir(grammarSource)).filter((name) =>
+  name.endsWith(".js"),
+);
 await Promise.all(
-  ["c.js", "cpp.js"].map((name) =>
+  grammars.map((name) =>
     cp(path.join(grammarSource, name), path.join(grammarDestination, name)),
   ),
 );

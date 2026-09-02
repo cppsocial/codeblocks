@@ -40,6 +40,9 @@ if (flags.has("--without-wasm")) {
 
 await run(
   process.execPath,
-  [path.join(projectRoot, "scripts", "copy-runtime-assets.mjs"), ...assetArguments],
+  [
+    path.join(projectRoot, "scripts", "copy-runtime-assets.mjs"),
+    ...assetArguments,
+  ],
   { label: "copy-runtime-assets" },
 );

@@ -12,13 +12,27 @@ declare const self: DedicatedWorkerGlobalScope;
 declare const __CLANGD_WASM_BASE__: string;
 
 type ClangdModule = {
-  FS: { writeFile(path: string, contents: string): void };
+  FS: {
+    writeFile(path: string, contents: string): void;
+    mkdirTree(path: string): void;
+  };
   callMain(args: string[]): void;
 };
 
 type ClangdFactory = (
   options: Record<string, unknown>,
 ) => Promise<ClangdModule>;
+
+type WorkspaceFile = { filename: string; contents: string };
+const pendingWorkspaceFiles: WorkspaceFile[][] = [];
+let installWorkspaceFiles: ((files: WorkspaceFile[]) => void) | undefined;
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "workspace-files") return;
+  event.stopImmediatePropagation();
+  const files = Array.isArray(event.data.files) ? event.data.files : [];
+  if (installWorkspaceFiles) installWorkspaceFiles(files);
+  else pendingWorkspaceFiles.push(files);
+});
 
 async function download(url: URL): Promise<Uint8Array> {
   const response = await fetch(url);
@@ -110,6 +124,20 @@ async function start(): Promise<void> {
     onAbort,
   });
 
+  installWorkspaceFiles = (files) => {
+    for (const file of files) {
+      const filename = safeWorkspaceFilename(file.filename);
+      if (!filename) continue;
+      const path = `${WORKSPACE_PATH}/${filename}`;
+      const parent = path.slice(0, path.lastIndexOf("/"));
+      clangd.FS.mkdirTree(parent);
+      clangd.FS.writeFile(path, String(file.contents ?? ""));
+    }
+  };
+  for (const files of pendingWorkspaceFiles.splice(0)) {
+    installWorkspaceFiles(files);
+  }
+
   const flags = [
     ...COMPILE_ARGS,
     "--target=wasm32-wasi",
@@ -137,6 +165,17 @@ async function start(): Promise<void> {
     resolveStdinReady();
   });
   self.postMessage({ type: "ready" });
+}
+
+function safeWorkspaceFilename(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const parts = value.replaceAll("\\", "/").split("/");
+  if (
+    !parts.length ||
+    parts.some((part) => !part || part === "." || part === "..")
+  )
+    return undefined;
+  return parts.join("/");
 }
 
 start().catch((error: unknown) => {

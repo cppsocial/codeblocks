@@ -2,10 +2,13 @@
   "use strict";
 
   var script = document.currentScript;
-  if (!script || !script.src) throw new Error("codeblocks.js requires a script URL");
+  if (!script || !script.src)
+    throw new Error("codeblocks.js requires a script URL");
   var debug = script.hasAttribute("data-debug");
   var serviceWorker = script.getAttribute("data-coi-serviceworker");
-  var localHost = /^(localhost|127(?:\.\d+){3}|\[::1\])$/.test(location.hostname);
+  var localHost = /^(localhost|127(?:\.\d+){3}|\[::1\])$/.test(
+    location.hostname,
+  );
   function log(message) {
     if (debug) console.info("[CodeBlocks] " + message);
   }
@@ -30,14 +33,24 @@
     },
   };
   globalThis.CodeBlocks = api;
+  // Start fetching the UI module immediately. Service-worker setup can happen in
+  // parallel; waiting for it first caused a conspicuous unstyled-source flash.
+  var modulePromise = import(
+    new URL("./codeblocks-module.js", script.src).href
+  );
 
   api.ready = (async function () {
     try {
       if (serviceWorker !== null && !globalThis.crossOriginIsolated) {
         if (!("serviceWorker" in navigator)) {
-          fail("Service workers are unavailable; clangd cannot enable cross-origin isolation");
+          fail(
+            "Service workers are unavailable; clangd cannot enable cross-origin isolation",
+          );
         } else {
-          var workerUrl = new URL(serviceWorker || "./coi-serviceworker.js", script.src);
+          var workerUrl = new URL(
+            serviceWorker || "./coi-serviceworker.js",
+            script.src,
+          );
           log("Registering isolation service worker at " + workerUrl.href);
           await navigator.serviceWorker.register(workerUrl, { scope: "./" });
           await navigator.serviceWorker.ready;
@@ -51,18 +64,24 @@
       }
 
       log("Cross-origin isolation: " + globalThis.crossOriginIsolated);
-      loadedModule = await import(new URL("./codeblocks-module.js", script.src).href);
+      loadedModule = await modulePromise;
       log("Code block module loaded");
       queuedConfigurations.forEach(loadedModule.configureCodeBlocks);
       api.configure = loadedModule.configureCodeBlocks;
       api.create = loadedModule.createCodeBlock;
       api.get = loadedModule.getCodeBlock;
       api.start = loadedModule.startCodeBlocks;
+      api.setEditorMode = loadedModule.setCodeBlocksEditorMode;
+      api.setTheme = loadedModule.setCodeBlocksTheme;
       loadedModule.startCodeBlocks();
       log("Code block scan started");
       return api;
     } catch (error) {
-      fail("Loader failed: " + (error instanceof Error ? error.message : String(error)), error);
+      fail(
+        "Loader failed: " +
+          (error instanceof Error ? error.message : String(error)),
+        error,
+      );
       throw error;
     }
   })();

@@ -1,9 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  mkdir,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { projectRoot, readProjectPackage } from "../lib/project.mjs";
 
@@ -24,9 +20,7 @@ async function isNonEmptyFile(file) {
 
 const haveAllArtifacts = (
   await Promise.all(
-    wasmFiles.map((name) =>
-      isNonEmptyFile(path.join(wasmDirectory, name)),
-    ),
+    wasmFiles.map((name) => isNonEmptyFile(path.join(wasmDirectory, name))),
   )
 ).every(Boolean);
 
@@ -42,9 +36,7 @@ function githubRepositoryFromUrl(url) {
     return undefined;
   }
 
-  const match = url.match(
-    /github\.com[/:]([^/]+)\/([^/#]+?)(?:\.git)?$/,
-  );
+  const match = url.match(/github\.com[/:]([^/]+)\/([^/#]+?)(?:\.git)?$/);
 
   if (!match) {
     return undefined;
@@ -63,9 +55,7 @@ if (!releaseRepository) {
   );
 }
 
-const token =
-  process.env.GITHUB_TOKEN ??
-  process.env.GH_TOKEN;
+const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 
 const headers = {
   Accept: "application/vnd.github+json",
@@ -114,11 +104,7 @@ const release = releases
       candidate.tag_name?.startsWith("clangd-wasm/") &&
       candidate.published_at,
   )
-  .sort(
-    (a, b) =>
-      Date.parse(a.published_at) -
-      Date.parse(b.published_at),
-  )
+  .sort((a, b) => Date.parse(a.published_at) - Date.parse(b.published_at))
   .at(-1);
 
 if (!release) {
@@ -127,15 +113,11 @@ if (!release) {
   );
 }
 
-const assets = new Map(
-  release.assets.map((asset) => [asset.name, asset]),
-);
+const assets = new Map(release.assets.map((asset) => [asset.name, asset]));
 
 for (const name of [...wasmFiles, "SHA256SUMS"]) {
   if (!assets.has(name)) {
-    throw new Error(
-      `Release ${release.tag_name} is missing ${name}.`,
-    );
+    throw new Error(`Release ${release.tag_name} is missing ${name}.`);
   }
 }
 
@@ -161,20 +143,15 @@ console.log(
   `Downloading clangd WebAssembly artifacts from ${release.tag_name}.`,
 );
 
-const checksumFile =
-  (await download("SHA256SUMS")).toString("utf8");
+const checksumFile = (await download("SHA256SUMS")).toString("utf8");
 
 const checksums = new Map();
 
 for (const line of checksumFile.split("\n")) {
-  const match =
-    line.match(/^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$/);
+  const match = line.match(/^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$/);
 
   if (match) {
-    checksums.set(
-      path.basename(match[2]),
-      match[1].toLowerCase(),
-    );
+    checksums.set(path.basename(match[2]), match[1].toLowerCase());
   }
 }
 
@@ -184,15 +161,11 @@ for (const name of wasmFiles) {
   const expected = checksums.get(name);
 
   if (!expected) {
-    throw new Error(
-      `SHA256SUMS does not contain ${name}.`,
-    );
+    throw new Error(`SHA256SUMS does not contain ${name}.`);
   }
 
   const contents = await download(name);
-  const actual = createHash("sha256")
-    .update(contents)
-    .digest("hex");
+  const actual = createHash("sha256").update(contents).digest("hex");
 
   if (actual !== expected) {
     throw new Error(
@@ -207,12 +180,7 @@ for (const name of wasmFiles) {
 await mkdir(wasmDirectory, { recursive: true });
 
 for (const [name, contents] of downloads) {
-  await writeFile(
-    path.join(wasmDirectory, name),
-    contents,
-  );
+  await writeFile(path.join(wasmDirectory, name), contents);
 }
 
-console.log(
-  `Installed clangd WebAssembly artifacts from ${release.tag_name}.`,
-);
+console.log(`Installed clangd WebAssembly artifacts from ${release.tag_name}.`);

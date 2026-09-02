@@ -1,4 +1,5 @@
 codeblock,
+cb,
 .codeblocks-root {
   --codeblocks-editor-height: 430px;
   --codeblocks-editor-height-mobile: 360px;
@@ -11,6 +12,11 @@ codeblock,
   --codeblocks-link: #b9c9df;
   --codeblocks-accent: #70d6ff;
   --codeblocks-accent-foreground: #071018;
+  --clangd-token-comment: #6a9955;
+  --clangd-token-string: #ce9178;
+  --clangd-token-keyword: #569cd6;
+  --clangd-token-number: #b5cea8;
+  --clangd-token-type: #4ec9b0;
   display: block;
   position: relative;
   box-sizing: border-box;
@@ -25,6 +31,30 @@ codeblock,
   line-height: normal;
 }
 
+/* Monaco's built-in `vs` themes use blue for control keywords. Microlighter's
+   `vscode-plus` theme uses the purple Dark+/Light+ override instead. Keep the
+   fallback palette aligned with the Monaco editor shown after it upgrades. */
+[data-syntax-theme="vscode-plus"] {
+  --syntax-keyword: light-dark(#0000ff, #569cd6);
+}
+
+/* Keep declarative source from painting as unstyled page text while the small
+   module is being fetched. The synchronous fallback replaces this state. */
+codeblock:not([data-codeblocks-upgraded]),
+cb:not([data-codeblocks-upgraded]) {
+  min-height: var(--codeblocks-editor-height);
+  overflow: hidden;
+  color: transparent;
+}
+cb:not([data-codeblocks-upgraded]) {
+  display: inline-block;
+  width: 8ch;
+  min-height: 1em;
+  border: 0;
+  background: transparent;
+  vertical-align: middle;
+}
+
 .codeblocks-root[data-theme="light"] {
   --codeblocks-background: #ffffff;
   --codeblocks-foreground: #1f2328;
@@ -35,11 +65,18 @@ codeblock,
   --codeblocks-link: #0969da;
   --codeblocks-accent: #0969da;
   --codeblocks-accent-foreground: #ffffff;
+  --clangd-token-comment: #008000;
+  --clangd-token-string: #a31515;
+  --clangd-token-keyword: #0000ff;
+  --clangd-token-number: #098658;
+  --clangd-token-type: #267f99;
 }
 
 .codeblocks-root *,
 .codeblocks-root *::before,
-.codeblocks-root *::after { box-sizing: border-box; }
+.codeblocks-root *::after {
+  box-sizing: border-box;
+}
 
 .codeblocks-editor-shell {
   position: relative;
@@ -47,6 +84,48 @@ codeblock,
   min-height: var(--codeblocks-editor-min-height, 160px);
   background: var(--codeblocks-background);
   border-radius: 7px 7px 0 0;
+}
+
+.codeblocks-workspace {
+  display: grid;
+  min-width: 0;
+}
+
+.codeblocks-workspace[data-output-position="side"] {
+  height: var(--codeblocks-editor-height);
+  min-height: var(--codeblocks-editor-min-height, 160px);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+  overflow: hidden;
+}
+
+.codeblocks-workspace[data-output-position="side"]:has(.codeblocks-info[open]) {
+  overflow: visible;
+}
+
+.codeblocks-workspace[data-output-position="side"] .codeblocks-editor-shell {
+  height: 100%;
+  min-height: 0;
+}
+
+.codeblocks-workspace[data-output-position="side"] .codeblocks-output {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-self: stretch;
+  overflow: hidden;
+  border-top: 0;
+  border-left: 1px solid var(--codeblocks-border);
+}
+.codeblocks-workspace[data-output-position="side"] .codeblocks-output[hidden] {
+  display: none;
+}
+
+.codeblocks-workspace[data-output-position="side"] .codeblocks-output pre {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .codeblocks-tabs {
@@ -84,36 +163,73 @@ codeblock,
   background: var(--codeblocks-background);
 }
 
-.codeblocks-fallback { z-index: 2; }
-.codeblocks-monaco { z-index: 1; opacity: 0; }
-.codeblocks-monaco[data-ready] { opacity: 1; }
-.codeblocks-monaco[hidden] { display: none; }
+.codeblocks-fallback {
+  z-index: 2;
+}
+.codeblocks-monaco {
+  z-index: 1;
+  opacity: 0;
+}
+.codeblocks-monaco[data-ready] {
+  opacity: 1;
+}
+.codeblocks-monaco[hidden] {
+  display: none;
+}
 
 .codeblocks-root[data-theme="dark"] .clangd-browser-fallback {
   --clangd-fallback-bg: #1e1e1e;
+  color-scheme: dark;
 }
 
 .codeblocks-root[data-theme="light"] .clangd-browser-fallback {
   --clangd-fallback-bg: #ffffff;
   --clangd-fallback-fg: #1f2328;
-  --clangd-token-comment: #008000;
-  --clangd-token-string: #a31515;
-  --clangd-token-preprocessor: #0000ff;
-  --clangd-token-keyword: #0000ff;
-  --clangd-token-number: #098658;
-  --clangd-token-namespace: #267f99;
-  --clangd-token-type: #267f99;
+  color-scheme: light;
 }
 
-.codeblocks-toolbar {
+.codeblocks-root[data-theme="dark"] .codeblocks-output {
+  color-scheme: dark;
+}
+.codeblocks-root[data-theme="light"] .codeblocks-output {
+  color-scheme: light;
+}
+
+.codeblocks-root[data-theme="dark"] .monaco-editor,
+.codeblocks-root[data-theme="dark"] .monaco-editor-background,
+.codeblocks-root[data-theme="dark"] .monaco-editor .margin {
+  background-color: #1e1e1e !important;
+}
+.codeblocks-root[data-theme="light"] .monaco-editor,
+.codeblocks-root[data-theme="light"] .monaco-editor-background,
+.codeblocks-root[data-theme="light"] .monaco-editor .margin {
+  background-color: #ffffff !important;
+}
+
+.codeblocks-toolbar,
+.codeblocks-settings-bar {
   display: flex;
-  flex-wrap: wrap;
-  min-height: 49px;
+  min-height: 42px;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--codeblocks-border);
+  gap: 8px;
+  padding: 5px 8px;
+  overflow: visible;
   background: var(--codeblocks-panel);
+}
+.codeblocks-settings-bar {
+  border-bottom: 1px solid var(--codeblocks-border);
+}
+.codeblocks-toolbar {
+  border-top: 1px solid var(--codeblocks-border);
+}
+.codeblocks-toolbar[hidden] {
+  display: none;
+}
+.codeblocks-settings-bar[hidden] {
+  display: none;
+}
+.codeblocks-settings[hidden] {
+  display: none;
 }
 
 .codeblocks-root button {
@@ -124,7 +240,9 @@ codeblock,
   background: var(--codeblocks-accent);
   color: var(--codeblocks-accent-foreground);
   cursor: pointer;
-  font: 600 13px/1 system-ui, sans-serif;
+  font:
+    600 13px/1 system-ui,
+    sans-serif;
 }
 
 .codeblocks-root button.codeblocks-secondary {
@@ -133,9 +251,22 @@ codeblock,
   color: var(--codeblocks-link);
 }
 
-.codeblocks-root button:disabled { opacity: .65; cursor: wait; }
-.codeblocks-root a { color: var(--codeblocks-link); text-decoration: none; }
-.codeblocks-root a:hover { text-decoration: underline; }
+.codeblocks-root button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.codeblocks-root button[hidden],
+.codeblocks-root a[hidden],
+.codeblocks-root details[hidden] {
+  display: none;
+}
+.codeblocks-root a {
+  color: var(--codeblocks-link);
+  text-decoration: none;
+}
+.codeblocks-root a:hover {
+  text-decoration: underline;
+}
 .codeblocks-root .codeblocks-compiler-link {
   display: inline-flex;
   min-height: 32px;
@@ -158,25 +289,221 @@ codeblock,
   color: #0b1d00;
   text-decoration: none;
 }
+.codeblocks-root .codeblocks-compiler-link[aria-disabled="true"] {
+  opacity: 0.55;
+  pointer-events: none;
+}
 .codeblocks-compiler-link svg {
   width: 15px;
   height: 15px;
   flex: none;
 }
-.codeblocks-debug { display: inline-flex; gap: 8px; }
-.codeblocks-debug[hidden] { display: none; }
-.codeblocks-output {
-  border-top: 1px solid var(--codeblocks-border);
-  background: var(--codeblocks-output-background);
+.codeblocks-settings {
+  display: contents;
+  position: relative;
 }
-.codeblocks-output[hidden] { display: none; }
-.codeblocks-output header {
-  padding: 9px 12px 0;
+.codeblocks-info {
+  position: absolute;
+  z-index: 10;
+  left: 10px;
+  bottom: 10px;
+}
+.codeblocks-info > summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--codeblocks-link);
+  font-size: 13px;
+  font-weight: 600;
+}
+.codeblocks-info > summary::-webkit-details-marker {
+  display: none;
+}
+.codeblocks-info > summary {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid var(--codeblocks-border);
+  border-radius: 50%;
+  font:
+    700 14px/1 ui-serif,
+    Georgia,
+    serif;
+}
+.codeblocks-popover {
+  position: absolute;
+  z-index: 100;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--codeblocks-border);
+  border-radius: 7px;
+  background: var(--codeblocks-panel);
+  box-shadow: 0 10px 32px rgb(0 0 0 / 0.28);
+  color: var(--codeblocks-foreground);
+}
+.codeblocks-settings-panel {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+}
+.codeblocks-settings-panel label {
+  position: relative;
+  min-width: 0;
+}
+.codeblocks-settings-panel label > span,
+.codeblocks-popover dt {
   color: var(--codeblocks-muted);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .08em;
+}
+.codeblocks-settings-panel label > span {
+  position: absolute;
+  z-index: 1;
+  top: 3px;
+  left: 8px;
+  overflow: hidden;
+  max-width: calc(100% - 16px);
+  line-height: 1;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.codeblocks-settings-panel label[data-field="language"] {
+  flex: 0 1 135px;
+}
+.codeblocks-settings-panel label[data-field="compiler"] {
+  flex: 0 1 260px;
+}
+.codeblocks-settings-panel label[data-field="compiler_args"] {
+  flex: 1 1 220px;
+}
+.codeblocks-settings-panel input,
+.codeblocks-settings-panel textarea,
+.codeblocks-settings-panel select {
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--codeblocks-border);
+  border-radius: 4px;
+  padding: 14px 8px 3px;
+  background: var(--codeblocks-output-background);
+  color: var(--codeblocks-foreground);
+  font:
+    12px/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+}
+.codeblocks-settings-panel select:disabled {
+  opacity: 0.7;
+}
+.codeblocks-execution-settings {
+  position: relative;
+  flex: none;
+}
+.codeblocks-execution-settings > summary {
+  display: grid;
+  min-height: 32px;
+  place-items: center;
+  border: 1px solid var(--codeblocks-border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  color: var(--codeblocks-link);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  list-style: none;
+}
+.codeblocks-execution-settings > summary::-webkit-details-marker {
+  display: none;
+}
+.codeblocks-execution-panel {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  width: min(360px, calc(100vw - 32px));
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--codeblocks-border);
+  border-radius: 6px;
+  background: var(--codeblocks-panel);
+  box-shadow: 0 10px 32px rgb(0 0 0 / 0.28);
+}
+.codeblocks-execution-panel label {
+  display: grid;
+  gap: 5px;
+}
+.codeblocks-execution-panel label > span {
+  position: static;
+}
+.codeblocks-execution-panel textarea {
+  height: auto;
+  min-height: 78px;
+  padding-top: 6px;
+  resize: vertical;
+}
+.codeblocks-popover p {
+  margin: 8px 0;
+  line-height: 1.45;
+}
+.codeblocks-popover dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 10px 0;
+}
+.codeblocks-popover dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+}
+.codeblocks-output {
+  min-height: 0;
+  margin: 0;
+  border-top: 1px solid var(--codeblocks-border);
+  background: var(--codeblocks-output-background);
+}
+.codeblocks-output[hidden] {
+  display: none;
+}
+.codeblocks-output header {
+  display: flex;
+  min-height: 40px;
+  gap: 0;
+  align-items: end;
+  overflow-x: auto;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--codeblocks-border);
+  color: var(--codeblocks-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.codeblocks-root button.codeblocks-output-tab {
+  min-height: 39px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 7px 10px 5px;
+  background: transparent;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.codeblocks-root button.codeblocks-output-tab[aria-pressed="true"] {
+  border-bottom-color: var(--codeblocks-accent);
+  color: var(--codeblocks-foreground);
 }
 .codeblocks-output pre {
   min-height: 72px;
@@ -186,15 +513,189 @@ codeblock,
   overflow: auto;
   white-space: pre-wrap;
   color: var(--codeblocks-foreground);
-  font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font:
+    13px/1.55 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
 }
-.codeblocks-stderr { color: #f48771; }
-.codeblocks-root[data-theme="light"] .codeblocks-stderr { color: #d1242f; }
+.codeblocks-output-actions {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 4px 8px;
+  border-top: 1px solid var(--codeblocks-border);
+  background: var(--codeblocks-panel);
+}
+.codeblocks-output-actions[hidden] {
+  display: none;
+}
+.codeblocks-output-actions .codeblocks-compiler-link {
+  margin-left: auto;
+}
+.codeblocks-root .codeblocks-icon-action,
+.codeblocks-root a.codeblocks-icon-action {
+  display: grid;
+  width: 29px;
+  min-width: 29px;
+  height: 29px;
+  min-height: 29px;
+  place-items: center;
+  border: 1px solid var(--codeblocks-border);
+  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: var(--codeblocks-link);
+}
+.codeblocks-root .codeblocks-icon-action:hover {
+  border-color: var(--codeblocks-accent);
+  background: color-mix(in srgb, var(--codeblocks-accent) 12%, transparent);
+  color: var(--codeblocks-foreground);
+}
+.codeblocks-root .codeblocks-icon-action svg {
+  width: 15px;
+  height: 15px;
+}
+.codeblocks-output code {
+  font: inherit;
+}
+.codeblocks-root .codeblocks-output pre:has(code) {
+  background: transparent;
+  color: var(--codeblocks-foreground);
+}
+.codeblocks-assembly-line {
+  display: block;
+  min-height: 1lh;
+}
+.codeblocks-assembly-token-comment {
+  color: var(--clangd-token-comment);
+}
+.codeblocks-assembly-token-keyword {
+  color: var(--clangd-token-keyword);
+}
+.codeblocks-assembly-token-number {
+  color: var(--clangd-token-number);
+}
+.codeblocks-assembly-token-register,
+.codeblocks-assembly-token-label {
+  color: var(--clangd-token-type);
+}
+.codeblocks-assembly-line[data-source-line]:hover {
+  background: color-mix(in srgb, var(--codeblocks-accent) 18%, transparent);
+}
+.codeblocks-assembly-source-hover {
+  background: color-mix(in srgb, var(--codeblocks-accent) 18%, transparent);
+}
+.codeblocks-root .monaco-editor .codeblocks-source-highlight,
+.codeblocks-root .monaco-editor .codeblocks-persistent-line-highlight {
+  background-color: color-mix(
+    in srgb,
+    var(--codeblocks-accent) 18%,
+    transparent
+  ) !important;
+}
+.codeblocks-stderr {
+  color: #f48771;
+}
+.codeblocks-exit-status {
+  color: var(--codeblocks-muted);
+}
+.codeblocks-exit-status-error {
+  color: #f48771;
+}
+.codeblocks-root[data-theme="light"] .codeblocks-stderr {
+  color: #d1242f;
+}
 
 .codeblocks-root .monaco-editor,
 .codeblocks-root .overflowingContentWidgets,
-.codeblocks-root .overflowingOverlayWidgets { overflow: visible !important; }
+.codeblocks-root .overflowingOverlayWidgets {
+  overflow: visible !important;
+}
+
+.codeblocks-root[data-readonly] textarea {
+  cursor: default;
+}
+.codeblocks-root[data-readonly] textarea {
+  caret-color: transparent;
+}
+.codeblocks-root[data-readonly] .monaco-editor .cursor {
+  display: none !important;
+}
+
+.codeblocks-root.codeblocks-inline {
+  --codeblocks-editor-min-height: 0px;
+  display: inline-block;
+  width: min(100%, var(--codeblocks-inline-width, 100%));
+  vertical-align: text-bottom;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: inherit;
+  line-height: inherit;
+}
+.codeblocks-root.codeblocks-inline .codeblocks-editor-shell,
+.codeblocks-root.codeblocks-inline .codeblocks-fallback,
+.codeblocks-root.codeblocks-inline .codeblocks-monaco,
+.codeblocks-root.codeblocks-inline .clangd-browser-editor,
+.codeblocks-root.codeblocks-inline .clangd-fallback-highlight,
+.codeblocks-root.codeblocks-inline .monaco-editor,
+.codeblocks-root.codeblocks-inline .monaco-editor-background,
+.codeblocks-root.codeblocks-inline .monaco-editor .margin,
+.codeblocks-root.codeblocks-inline .clangd-browser-fallback {
+  border-radius: 0;
+  background: transparent !important;
+}
+.codeblocks-inline .clangd-browser-fallback {
+  --clangd-fallback-bg: transparent !important;
+  --clangd-fallback-pad-y: 0px;
+  --clangd-fallback-gutter: 0px;
+  --clangd-fallback-font: inherit;
+}
+.codeblocks-inline .clangd-fallback-lines {
+  display: none;
+}
+.codeblocks-inline .codeblocks-workspace,
+.codeblocks-inline .codeblocks-editor-shell,
+.codeblocks-inline .clangd-browser-fallback,
+.codeblocks-inline .clangd-fallback-highlight,
+.codeblocks-inline .clangd-browser-fallback textarea,
+.codeblocks-inline .monaco-editor,
+.codeblocks-inline .monaco-scrollable-element {
+  overflow: hidden !important;
+}
 
 @media (max-width: 640px) {
-  .codeblocks-editor-shell { height: var(--codeblocks-editor-height-mobile); }
+  .codeblocks-settings-bar,
+  .codeblocks-settings-panel {
+    flex-wrap: wrap;
+  }
+  .codeblocks-settings-panel {
+    flex-basis: 100%;
+  }
+  .codeblocks-editor-shell {
+    height: var(--codeblocks-editor-height-mobile);
+  }
+  .codeblocks-inline .codeblocks-editor-shell {
+    height: var(--codeblocks-editor-height);
+  }
+  .codeblocks-workspace[data-output-position="side"] {
+    grid-template-columns: 1fr;
+  }
+  .codeblocks-workspace[data-output-position="side"] {
+    height: auto;
+    overflow: visible;
+  }
+  .codeblocks-workspace[data-output-position="side"] .codeblocks-editor-shell {
+    height: var(--codeblocks-editor-height-mobile);
+  }
+  .codeblocks-workspace[data-output-position="side"] .codeblocks-output {
+    height: auto;
+    border-top: 1px solid var(--codeblocks-border);
+    border-left: 0;
+  }
 }

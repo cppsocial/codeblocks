@@ -1,16 +1,10 @@
 .clangd-browser-fallback {
   --clangd-fallback-bg: #1e1e1e;
   --clangd-fallback-fg: #d4d4d4;
-  --clangd-token-comment: #6a9955;
-  --clangd-token-string: #ce9178;
-  --clangd-token-preprocessor: #569cd6;
-  --clangd-token-keyword: #569cd6;
-  --clangd-token-number: #b5cea8;
-  --clangd-token-namespace: #4ec9b0;
-  --clangd-token-type: #4ec9b0;
   --clangd-fallback-gutter: 31px;
   --clangd-fallback-pad-y: 16px;
-  --clangd-fallback-font: 14px/23px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --clangd-fallback-font:
+    14px/23px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   position: relative;
   overflow: hidden;
   height: 100%;
@@ -30,6 +24,27 @@
   white-space: pre;
   user-select: none;
   will-change: transform;
+}
+.clangd-fallback-line-highlights {
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 0 var(--clangd-fallback-gutter);
+  pointer-events: none;
+  will-change: transform;
+}
+.clangd-fallback-line-highlights > span {
+  position: absolute;
+  top: calc(
+    var(--clangd-fallback-pad-y) + (var(--clangd-highlight-line) - 1) * 1lh
+  );
+  right: 0;
+  left: 0;
+  height: 1lh;
+  background: color-mix(
+    in srgb,
+    var(--codeblocks-accent, #70d6ff) 18%,
+    transparent
+  );
 }
 .clangd-fallback-highlight,
 .clangd-browser-fallback textarea {
@@ -51,7 +66,9 @@
   pointer-events: none;
   will-change: transform;
 }
-.clangd-fallback-highlight code { font: inherit; }
+.clangd-fallback-highlight code {
+  font: inherit;
+}
 .clangd-browser-fallback textarea {
   z-index: 1;
   resize: none;
@@ -65,27 +82,4 @@
   background: #264f78;
   color: transparent;
   -webkit-text-fill-color: transparent;
-}
-.clangd-fallback-highlight code::highlight(comment),
-.clangd-fallback-highlight code::highlight(quote) {
-  color: var(--clangd-token-comment);
-}
-.clangd-fallback-highlight code::highlight(string),
-.clangd-fallback-highlight code::highlight(attribute-value) {
-  color: var(--clangd-token-string);
-}
-.clangd-fallback-highlight code::highlight(keyword),
-.clangd-fallback-highlight code::highlight(storage),
-.clangd-fallback-highlight code::highlight(operator) {
-  color: var(--clangd-token-keyword);
-}
-.clangd-fallback-highlight code::highlight(numeric),
-.clangd-fallback-highlight code::highlight(boolean),
-.clangd-fallback-highlight code::highlight(constant) {
-  color: var(--clangd-token-number);
-}
-.clangd-fallback-highlight code::highlight(type),
-.clangd-fallback-highlight code::highlight(support),
-.clangd-fallback-highlight code::highlight(entity) {
-  color: var(--clangd-token-type);
 }

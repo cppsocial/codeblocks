@@ -14,21 +14,22 @@ if (!source || !destination || !name) {
 }
 
 const sourceDirectory = projectDescendant(source, "source directory");
-const destinationDirectory = projectDescendant(destination, "package directory");
+const destinationDirectory = projectDescendant(
+  destination,
+  "package directory",
+);
 const project = await readProjectPackage();
 
 await rm(destinationDirectory, { recursive: true, force: true });
 await mkdir(destinationDirectory, { recursive: true });
 await cp(sourceDirectory, destinationDirectory, {
   recursive: true,
-  filter: (file) => !/[\\/]index\.html$|[\\/]_headers$/.test(file),
+  filter: (file) =>
+    !/[\\/]index\.html$|[\\/]_headers$|[\\/]examples(?:[\\/]|$)/.test(file),
 });
 
 for (const file of ["README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]) {
-  await cp(
-    path.join(projectRoot, file),
-    path.join(destinationDirectory, file),
-  );
+  await cp(path.join(projectRoot, file), path.join(destinationDirectory, file));
 }
 
 await writeFile(

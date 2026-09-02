@@ -18,7 +18,9 @@ export function parseArguments(values = process.argv.slice(2)) {
 export function projectChild(value, description = "path") {
   const resolved = path.resolve(projectRoot, value);
   if (path.dirname(resolved) !== projectRoot) {
-    throw new Error(`The ${description} must be directly inside the project root.`);
+    throw new Error(
+      `The ${description} must be directly inside the project root.`,
+    );
   }
   return resolved;
 }
@@ -26,14 +28,20 @@ export function projectChild(value, description = "path") {
 export function projectDescendant(value, description = "path") {
   const resolved = path.resolve(projectRoot, value);
   const relative = path.relative(projectRoot, resolved);
-  if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+  if (
+    !relative ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
     throw new Error(`The ${description} must be inside the project root.`);
   }
   return resolved;
 }
 
 export async function readProjectPackage() {
-  return JSON.parse(await readFile(path.join(projectRoot, "package.json"), "utf8"));
+  return JSON.parse(
+    await readFile(path.join(projectRoot, "package.json"), "utf8"),
+  );
 }
 
 export function run(command, args, options = {}) {
@@ -48,11 +56,13 @@ export function run(command, args, options = {}) {
     child.on("exit", (code, signal) => {
       if (code === 0) resolve();
       else {
-        reject(new Error(
-          `${options.label ?? path.basename(command)} failed${
-            signal ? ` with signal ${signal}` : ` with exit code ${code}`
-          }.`,
-        ));
+        reject(
+          new Error(
+            `${options.label ?? path.basename(command)} failed${
+              signal ? ` with signal ${signal}` : ` with exit code ${code}`
+            }.`,
+          ),
+        );
       }
     });
   });
