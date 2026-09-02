@@ -175,8 +175,6 @@ The release workflow publishes two packages from the same source and version:
 
 - `codeblocks` is self-contained and includes the clangd JavaScript and
   WebAssembly files from `public/wasm/`.
-- `codeblocks-remote` omits those large files and builds the worker to load
-  them from `https://clangd.cpp.social/wasm/`.
 
 Both packages contain the classic loader as the `./loader` export, the stylesheet
 as `./styles.css`, the typed ES module API at the package root, and every emitted
