@@ -6,7 +6,7 @@ ARG PNPM_VERSION=9.1.1
 # Install pnpm with npm instead of using the Corepack shim bundled in Node.
 # Older Corepack releases fail while verifying pnpm's rotated signing key.
 # Keep this image focused on frontend development and testing. The separate
-# LLVM-to-Wasm toolchain in build.sh intentionally runs on the host/CI runner.
+# LLVM-to-Wasm toolchain in scripts/clangd/build.sh runs on the host/CI runner.
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
         ca-certificates \

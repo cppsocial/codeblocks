@@ -1,9 +1,8 @@
 name: Publish npm packages
 
 on:
-  push:
-    tags:
-      - "codeblocks/v*"
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -11,35 +10,62 @@ permissions:
 
 jobs:
   publish:
+    if: startsWith(github.event.release.tag_name, 'npm/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: pnpm
+          node-version: "24"
           registry-url: https://registry.npmjs.org
-      - run: pnpm install --frozen-lockfile
-      - name: Install WASM from the latest artifact release
+      - name: Validate npm release
+        shell: bash
+        env:
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          version=$(node -p "require('./package.json').version")
+          expected_tag="npm/$version"
+          expected_title="npm: $version"
+
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Expected release tag '$expected_tag'." >&2
+            echo "Got '$RELEASE_TAG'." >&2
+            exit 1
+          fi
+
+          if [[ "$RELEASE_NAME" != "$expected_title" ]]; then
+            echo "Expected release title '$expected_title'." >&2
+            echo "Got '$RELEASE_NAME'." >&2
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Prepare self-contained package
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
-        run: scripts/install-latest-clangd-release
-      - name: Verify package version
-        run: test "codeblocks/v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
-      - name: Build self-contained package
-        run: pnpm build && pnpm package:npm
+        run: pnpm prepare && pnpm package:npm
       - name: Build hosted-WASM package
         env:
           CLANGD_WASM_BASE: https://clangd.cpp.social/wasm/
         run: |
-          pnpm exec vite build --outDir dist-remote --emptyOutDir
-          pnpm exec tsc -p tsconfig.types.json --outDir dist-remote/types
-          node scripts/copy-runtime-assets.mjs --outdir=dist-remote --without-wasm
-          node scripts/prepare-npm-package.mjs dist-remote packages/codeblocks-remote codeblocks-remote
-      - run: npm install --global npm@latest
-      - name: Publish codeblocks
-        run: npm publish packages/codeblocks --access public --provenance
-      - name: Publish codeblocks-remote
-        run: npm publish packages/codeblocks-remote --access public --provenance
+          pnpm build:hosted
+          pnpm package:npm:hosted
+
+      - name: Install current npm
+        run: npm install --global npm@latest
+
+      - name: Inspect packages
+        run: |
+          npm pack ./packages/codeblocks --dry-run
+          npm pack ./packages/codeblocks-hosted --dry-run
+      - name: Publish @cppsocial/codeblocks
+        run: npm publish ./packages/codeblocks --access public --provenance
+      - name: Publish @cppsocial/codeblocks-hosted
+        run: npm publish ./packages/codeblocks-hosted --access public --provenance

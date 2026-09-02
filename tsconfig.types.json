@@ -10,6 +10,7 @@
     "src/codeblocks.ts",
     "src/runtime.ts",
     "src/ansi.ts",
+    "src/microlighter.d.ts",
     "src/vite-env.d.ts"
   ]
 }

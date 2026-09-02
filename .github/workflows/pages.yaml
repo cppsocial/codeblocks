@@ -19,13 +19,12 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-      - run: pnpm install --frozen-lockfile
-      - name: Get clangd wasm from the latest artifact release
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Prepare distribution
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
-        run: scripts/install-latest-clangd-release
-      - run: pnpm build
+        run: pnpm prepare
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist

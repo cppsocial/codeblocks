@@ -15,7 +15,7 @@ export default defineConfig({
         editor: "src/runtime.ts",
         fallback: "src/fallback.ts",
         ansi: "src/ansi.ts",
-        "codeblocks-module": "src/codeblocks.ts",
+        "codeblocks-module": "src/codeblocks-entry.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

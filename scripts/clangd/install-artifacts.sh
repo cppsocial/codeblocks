@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "$(dirname "$0")/common.sh"
+
 if [[ $# -ne 1 ]]; then
   echo "Usage: $0 PATH_TO_ARTIFACT_DIRECTORY_OR_TAR_GZ" >&2
   exit 2
 fi
 
-workspace_dir=$(cd "$(dirname "$0")/.." && pwd)
 source_path=$(realpath "$1")
 temporary_dir=""
 
@@ -26,9 +27,9 @@ if [[ -z "$clangd_js" || -z "$clangd_wasm" ]]; then
   exit 1
 fi
 
-mkdir -p "$workspace_dir/public/wasm"
+mkdir -p "$clangd_wasm_dir"
 artifact_root=$(dirname "$clangd_js")
 # Copy the complete generated set, including pthread/data files whose names may
 # differ between Emscripten releases.
-find "$artifact_root" -maxdepth 1 -type f ! -name '.*' -exec cp -p {} "$workspace_dir/public/wasm/" \;
-echo "Installed clangd artifacts in $workspace_dir/public/wasm"
+find "$artifact_root" -maxdepth 1 -type f ! -name '.*' -exec cp -p {} "$clangd_wasm_dir/" \;
+echo "Installed clangd artifacts in $clangd_wasm_dir"

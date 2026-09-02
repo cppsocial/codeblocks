@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-workspace_dir=$(cd "$(dirname "$0")/.." && pwd)
-wasm_dir="$workspace_dir/public/wasm"
+source "$(dirname "$0")/common.sh"
+workspace_dir=$clangd_project_root
+wasm_dir=$clangd_wasm_dir
 release_id=${1:-$(date -u +%Y%m%d-%H%M%S)}
 
 cd "$workspace_dir"
@@ -42,12 +43,7 @@ if [[ ! "$release_repository" =~ ^[^/]+/[^/]+$ ]]; then
   exit 1
 fi
 
-for artifact in clangd.js clangd.wasm; do
-  if [[ ! -s "$wasm_dir/$artifact" ]]; then
-    echo "Missing or empty artifact: public/wasm/$artifact" >&2
-    exit 1
-  fi
-done
+require_clangd_artifacts
 
 gh auth status >/dev/null
 

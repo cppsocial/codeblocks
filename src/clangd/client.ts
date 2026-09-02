@@ -1,4 +1,4 @@
-import clangdWorkerUrl from "./clangd.worker?worker&url";
+import clangdWorkerUrl from "./worker?worker&url";
 import { createRemoteModuleWorker } from "./worker-bootstrap";
 
 export type EditorStatus =

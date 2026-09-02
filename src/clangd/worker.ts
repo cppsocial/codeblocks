@@ -1,7 +1,7 @@
 /// <reference lib="WebWorker" />
 
-import { COMPILE_ARGS, FILE_PATH, WORKSPACE_PATH } from "../config";
-import { JsonStream } from "../json_stream";
+import { COMPILE_ARGS, FILE_PATH, WORKSPACE_PATH } from "./config";
+import { JsonStream } from "./json-stream";
 import {
   BrowserMessageReader,
   BrowserMessageWriter,

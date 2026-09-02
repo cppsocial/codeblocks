@@ -2,6 +2,8 @@
 
 This package turns ordinary `<codeblock>` tags into editable, runnable C++ examples. It starts with a small textarea editor, upgrades to Monaco when the main bundle is ready, and runs a WebAssembly build of clangd for code help. Multiple blocks on one page share the same runtime, worker, and clangd download.
 
+This project started as a fork of the excellent https://github.com/guyutongxue/clangd-in-browser/.
+
 ## Add a code block
 
 Copy the complete contents of `dist/` to one public directory, then include one stylesheet and one classic script:
@@ -36,8 +38,8 @@ Supported attributes are:
 - `args`: arguments sent unchanged to Compiler Explorer.
 - `ce-url`: Compiler Explorer base URL, defaulting to `https://godbolt.org/`.
 - `ce-language`: language stored in the Compiler Explorer client state, defaulting to `c++`.
-- `ce-compiler`: override the linked Compiler Explorer compiler without changing Run.
-- `ce-options`: override the linked Compiler Explorer arguments without changing Run.
+- `ce-compiler`: legacy fallback for the compiler when `compiler` is absent.
+- `ce-options`: legacy fallback for arguments when `args` is absent.
 - `ce-filters`: JSON object overriding Compiler Explorer output filters, such as `'{"intel":false,"demangle":true}'`.
 - `theme`: `auto`, `light`, or `dark`.
 - `debug`: show the basic/full editor and light/dark switches. These are hidden by default.
@@ -71,9 +73,17 @@ Supported attributes are:
 </script>
 ```
 
-Call `CodeBlocks.configure(options)` before a block is upgraded to set defaults for later blocks. The available options are `theme`, `showDebugControls`, `compiler`, `args`, `compilerExplorer`, `editorOptions`, `styles`, and `onStatus`.
+Call `CodeBlocks.configure(options)` before a block is upgraded to set defaults
+for later blocks. The available options are `theme`, `showDebugControls`,
+`compiler`, `args`, `compilerExplorer`, `editorOptions`, `styles`,
+`renderOutput`, `onResult`, and `onStatus`.
 
-The Compiler Explorer link contains the active source, filename, compiler, arguments, and output filters in its `/clientstate/` URL. No upload or short-link request is needed. Client-state fields can be overridden globally or when creating an individual block:
+The Compiler Explorer link contains the active source, filename, compiler,
+arguments, execution view, and output filters in its `/clientstate/` URL. No
+upload or short-link request is needed. Additional client-state fields can be
+configured globally or when creating an individual block. The nested
+`compiler` and `options` values are fallbacks; the code box's top-level
+`compiler` and `args` always win so Run and the link cannot diverge:
 
 ```js
 CodeBlocks.configure({
@@ -97,7 +107,24 @@ CodeBlocks.configure({
 
 The legacy `compilerExplorerUrl` JavaScript option remains available as an alias for `compilerExplorer.baseUrl`.
 
-`CodeBlocks.get(element)` returns the upgraded block instance. It exposes `getValue`, `setValue`, `getTabs`, `selectTab`, `getCompilerExplorerUrl`, `focus`, `run`, `setTheme`, `dispose`, `onDidChange`, `editorReady`, `monacoReady`, and `clangdReady`. `getValue` and `setValue` act on the active tab. `monacoReady` resolves to the underlying Monaco standalone editor for integrations that need the native editor API.
+`CodeBlocks.get(element)` returns the upgraded block instance. It exposes
+`getValue`, `setValue`, `getTabs`, `selectTab`, `getCompilerExplorerUrl`,
+`focus`, `compile`, `run`, `setTheme`, `dispose`, `onDidChange`, `editorReady`,
+`monacoReady`, and `clangdReady`. `getValue` and `setValue` act on the active
+tab. `monacoReady` resolves to the underlying Monaco standalone editor for
+integrations that need the native editor API.
+
+`compile()` is the presentation-independent path: it returns the structured
+Compiler Explorer JSON result, including execution output and assembly. Set
+`renderOutput: false` to suppress the built-in drawer, and use `onResult` to
+observe results produced by either `compile()` or the Run button. The exported
+`compileWithCompilerExplorer(request)` function is available for consumers that
+do not need a code-block UI at all.
+
+Run and the generated Compiler Explorer link resolve one shared compiler,
+language, and argument set. The link enables execution and includes both the
+assembly compiler and an execution/output view using that same compiler ID and
+options.
 
 Styling uses CSS custom properties. Common properties include:
 
@@ -124,7 +151,11 @@ Debug mode also writes lifecycle messages to the browser console, including Mona
 ></script>
 ```
 
-The lower-level ES module entries remain available as `editor.js`, `fallback.js`, and `ansi.js`.
+The lower-level ES module entries remain available as `editor.js`, `fallback.js`,
+and `ansi.js`. The fallback editor is language-agnostic internally; its current
+C++ adapter uses [Microlighter](https://github.com/davatron5000/microlighter),
+which applies an on-demand TextMate grammar through the CSS Custom Highlight
+API while keeping the code DOM as plain text.
 
 ## Cross-origin isolation
 
@@ -152,7 +183,9 @@ If assets are hosted on another origin, that origin must allow CORS and send `Cr
 
 ## Build and test
 
-The repository already contains the prebuilt clangd artifacts in `public/wasm`. Front-end changes do not rebuild LLVM or clangd.
+Installing dependencies downloads the latest verified prebuilt clangd artifacts
+into `public/wasm` and builds the self-contained distribution. Front-end changes
+do not rebuild LLVM or clangd.
 
 ```bash
 pnpm install
@@ -169,12 +202,37 @@ pnpm exec playwright install chromium
 pnpm test:browser
 ```
 
+The heavyweight LLVM/clangd build recipe and its required source patch live in
+`scripts/clangd/`. Front-end work normally uses released artifacts. To build
+clangd itself, run `scripts/clangd/build.sh`; to install a local artifact set,
+run `scripts/clangd/install-artifacts.sh PATH`.
+
+The TypeScript source is split by responsibility: `codeblocks/` owns UI
+orchestration, `compiler-explorer/` owns the headless API and link state,
+`editor/` contains fallback and Monaco adapters, `languages/` contains small
+syntax adapters, and `clangd/` owns the WebAssembly worker transport. Files at
+the top of `src/` are stable public build entrypoints.
+
 ## npm packages
 
-The release workflow publishes two packages from the same source and version:
+The release workflow publishes two scoped packages from the same source and version:
 
-- `codeblocks` is self-contained and includes the clangd JavaScript and
-  WebAssembly files from `public/wasm/`.
+- `@cppsocial/codeblocks` is self-contained and includes the clangd JavaScript
+  and WebAssembly files from `public/wasm/`.
+- `@cppsocial/codeblocks-hosted` loads the clangd WebAssembly assets hosted at
+  `https://clangd.cpp.social/wasm/`.
+
+Install the self-contained package from npm or directly from the GitHub
+repository:
+
+```bash
+npm install @cppsocial/codeblocks
+npm install github:cppsocial/codeblocks
+```
+
+The GitHub form downloads the verified clangd artifacts and builds the package
+during installation. The smaller hosted variant is available from npm as
+`@cppsocial/codeblocks-hosted`.
 
 Both packages contain the classic loader as the `./loader` export, the stylesheet
 as `./styles.css`, the typed ES module API at the package root, and every emitted
@@ -189,13 +247,22 @@ pnpm package:npm
 npm pack ./packages/codeblocks
 ```
 
-<<<<<<< HEAD
-=======
-Publishing is restricted to the `Publish npm packages` workflow and tags matching
-`codeblocks/v<package-version>`. Its separate artifact-install step downloads and
-verifies the newest `clangd-wasm/*` release before either distribution is built.
+Publishing is restricted to the `Publish npm packages` workflow and GitHub
+releases whose tag is `npm/<package-version>` and title is
+`npm: <package-version>`. Its preparation step downloads and verifies the newest
+`clangd-wasm/*` release before either distribution is built.
 The packages are then published using npm trusted publishing and provenance.
->>>>>>> b363f44 (add missing changes)
+
+For the initial npm setup, publish the two placeholder packages once:
+
+```bash
+npm publish ./bootstrap/codeblocks
+npm publish ./bootstrap/codeblocks-hosted
+```
+
+Then configure `publish-npm.yaml` as the trusted GitHub Actions publisher for
+both packages in npm, with `npm publish` allowed. Subsequent versions must only
+be published by the release workflow.
 
 Create a deployable archive with:
 

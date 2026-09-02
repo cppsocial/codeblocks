@@ -45,11 +45,18 @@ test("fallback and Run work before the full editor loads", async ({ page }) => {
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
   const fallback = page.getByLabel("C++ source code");
   await expect(fallback).toBeVisible();
+  await expect(page.locator(".clangd-fallback-highlight > code"))
+    .toHaveClass(/language-cpp/);
+  await expect(page.locator(".clangd-fallback-highlight > code > *"))
+    .toHaveCount(0);
   await expect(page.locator(".clangd-token-preprocessor")).toHaveText("#include");
   await expect(page.locator(".clangd-token-header")).toHaveText("<print>");
   await expect(page.locator(".clangd-token-type").first()).toHaveText("int");
   await expect(page.locator(".clangd-token-namespace").first()).toHaveText("std");
   await fallback.fill("int main() { return 7; } // before upgrade");
+  await expect.poll(() => page.evaluate(() =>
+    (CSS.highlights.get("comment")?.size ?? 0) > 0,
+  )).toBe(true);
   await page.locator("[data-run]").click();
   await expect(page.locator("[data-output]")).toContainText("colored output");
   expect(await page.locator("[data-output]").textContent()).not.toContain("\u001b[K");
@@ -94,12 +101,64 @@ test("Compiler Explorer link carries the active client state and is right aligne
     compilers: [{
       id: "gsnapshot",
       options: "-std=c++26 -freflection",
-      filters: { intel: false, demangle: true },
+      filters: { intel: false, demangle: true, execute: true },
+    }],
+    executors: [{
+      arguments: "",
+      compiler: {
+        id: "gsnapshot",
+        options: "-std=c++26 -freflection",
+      },
+      stdin: "",
     }],
   });
   expect(result.rightGap).toBe(12);
   expect(result.background).toBe("rgb(103, 197, 42)");
   expect(result.target).toBe("_blank");
+});
+
+test("compile exposes JSON without requiring the built-in output presenter", async ({ page }) => {
+  await page.route("https://godbolt.org/api/compiler/**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        didExecute: true,
+        code: 0,
+        stdout: [{ text: "structured output" }],
+        asm: [{ text: "ret" }],
+      }),
+    });
+  });
+  await page.goto("http://localhost:4173/", { waitUntil: "domcontentloaded" });
+  const value = await page.evaluate(async () => {
+    const api = await (globalThis as any).CodeBlocks.ready;
+    const element = document.createElement("div");
+    document.body.append(element);
+    let observed;
+    const block = api.createCodeBlock({
+      element,
+      value: "int main() {}",
+      compiler: "gsnapshot",
+      args: "-std=c++26 -O2",
+      renderOutput: false,
+      onResult: (result: unknown) => { observed = result; },
+    });
+    const result = await block.compile();
+    return {
+      result,
+      observed,
+      drawerHidden: element.querySelector<HTMLElement>("[data-output-drawer]")!.hidden,
+    };
+  });
+  expect(value).toEqual({
+    result: expect.objectContaining({
+      didExecute: true,
+      stdout: [{ text: "structured output" }],
+      asm: [{ text: "ret" }],
+    }),
+    observed: expect.objectContaining({ didExecute: true }),
+    drawerHidden: true,
+  });
 });
 
 test("editor switch has matching surfaces and explicit themes", async ({ page }) => {

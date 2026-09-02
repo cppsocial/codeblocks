@@ -1,5 +1,10 @@
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  projectDescendant,
+  projectRoot,
+  readProjectPackage,
+} from "./lib/project.mjs";
 
 const [source, destination, name] = process.argv.slice(2);
 if (!source || !destination || !name) {
@@ -8,12 +13,9 @@ if (!source || !destination || !name) {
   );
 }
 
-const root = path.resolve(import.meta.dirname, "..");
-const sourceDirectory = path.resolve(root, source);
-const destinationDirectory = path.resolve(root, destination);
-const project = JSON.parse(
-  await readFile(path.join(root, "package.json"), "utf8"),
-);
+const sourceDirectory = projectDescendant(source, "source directory");
+const destinationDirectory = projectDescendant(destination, "package directory");
+const project = await readProjectPackage();
 
 await rm(destinationDirectory, { recursive: true, force: true });
 await mkdir(destinationDirectory, { recursive: true });
@@ -21,14 +23,14 @@ await cp(sourceDirectory, destinationDirectory, {
   recursive: true,
   filter: (file) => !/[\\/]index\.html$|[\\/]_headers$/.test(file),
 });
-const declaration = path.join(destinationDirectory, "types", "codeblocks.d.ts");
-await writeFile(
-  declaration,
-  (await readFile(declaration, "utf8")).replace(
-    'import "./codeblocks.css";\n',
-    "",
-  ),
-);
+
+for (const file of ["README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]) {
+  await cp(
+    path.join(projectRoot, file),
+    path.join(destinationDirectory, file),
+  );
+}
+
 await writeFile(
   path.join(destinationDirectory, "package.json"),
   `${JSON.stringify(
@@ -37,6 +39,10 @@ await writeFile(
       version: project.version,
       description: project.description,
       license: project.license,
+      repository: project.repository,
+      publishConfig: {
+        access: "public",
+      },
       type: "module",
       files: ["**/*"],
       exports: {

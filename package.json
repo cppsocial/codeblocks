@@ -1,33 +1,52 @@
 {
-  "name": "codeblocks",
+  "name": "@cppsocial/codeblocks",
   "private": true,
   "version": "0.1.0",
   "description": "Editable C++ code blocks backed by Monaco and clangd WebAssembly",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cppsocial/clangd-web.git"
+    "url": "https://github.com/cppsocial/codeblocks.git"
   },
   "type": "module",
+  "types": "./dist/types/codeblocks.d.ts",
+  "files": [
+    "dist/**/*",
+    "!dist/index.html",
+    "!dist/_headers"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/codeblocks.d.ts",
+      "import": "./dist/codeblocks-module.js"
+    },
+    "./loader": {
+      "types": "./dist/loader.d.ts",
+      "default": "./dist/codeblocks.js"
+    },
+    "./styles.css": "./dist/codeblocks.css"
+  },
   "scripts": {
-    "clean": "vite-node --config ./scripts/vite.node.ts ./scripts/clean.ts",
+    "clean": "node scripts/build-package.mjs --clean",
     "dev": "pnpm build",
     "watch": "tsc -w",
-    "build": "pnpm run clean && tsc && vite build && tsc -p tsconfig.types.json && node scripts/copy-runtime-assets.mjs",
-    "package:npm": "node scripts/prepare-npm-package.mjs dist packages/codeblocks codeblocks",
+    "build": "node scripts/build-package.mjs",
+    "build:hosted": "node scripts/build-package.mjs --outdir=dist-hosted --without-wasm",
+    "prepare": "node scripts/clangd/ensure-wasm.mjs && npm run build",
+    "package:npm": "node scripts/prepare-npm-package.mjs dist packages/codeblocks @cppsocial/codeblocks",
+    "package:npm:hosted": "node scripts/prepare-npm-package.mjs dist-hosted packages/codeblocks-hosted @cppsocial/codeblocks-hosted",
     "pack:runtime": "pnpm build && bash scripts/package-runtime.sh",
-    "release:wasm": "bash scripts/release-clangd-wasm.sh",
+    "release:wasm": "bash scripts/clangd/release-wasm.sh",
     "demo:origins": "node scripts/serve-test.mjs",
     "test:browser": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/emscripten": "^1.39.10",
     "@types/node": "~20.12.12",
     "@types/vscode": "~1.89.0",
-    "@playwright/test": "^1.55.0",
     "typescript": "^5.4.5",
-    "vite": "^5.4.8",
-    "vite-node": "~1.6.0"
+    "vite": "^5.4.8"
   },
   "dependencies": {
     "@codingame/esbuild-import-meta-url-plugin": "~1.0.2",
@@ -35,6 +54,7 @@
     "@codingame/monaco-vscode-cpp-default-extension": "~8.0.4",
     "@codingame/monaco-vscode-textmate-service-override": "~8.0.4",
     "@codingame/monaco-vscode-theme-service-override": "~8.0.4",
+    "microlighter": "^2.1.0",
     "monaco-editor": "npm:@codingame/monaco-vscode-editor-api@~8.0.4",
     "monaco-editor-wrapper": "~5.5.3",
     "monaco-languageclient": "~8.8.3",
