@@ -1,0 +1,45 @@
+name: Publish npm packages
+
+on:
+  push:
+    tags:
+      - "codeblocks/v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: Install WASM from the latest artifact release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: scripts/install-latest-clangd-release
+      - name: Verify package version
+        run: test "codeblocks/v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - name: Build self-contained package
+        run: pnpm build && pnpm package:npm
+      - name: Build hosted-WASM package
+        env:
+          CLANGD_WASM_BASE: https://clangd.cpp.social/wasm/
+        run: |
+          pnpm exec vite build --outDir dist-remote --emptyOutDir
+          pnpm exec tsc -p tsconfig.types.json --outDir dist-remote/types
+          node scripts/copy-runtime-assets.mjs --outdir=dist-remote --without-wasm
+          node scripts/prepare-npm-package.mjs dist-remote packages/codeblocks-remote codeblocks-remote
+      - run: npm install --global npm@latest
+      - name: Publish codeblocks
+        run: npm publish packages/codeblocks --access public --provenance
+      - name: Publish codeblocks-remote
+        run: npm publish packages/codeblocks-remote --access public --provenance

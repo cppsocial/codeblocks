@@ -189,6 +189,13 @@ pnpm package:npm
 npm pack ./packages/codeblocks
 ```
 
+<<<<<<< HEAD
+=======
+Publishing is restricted to the `Publish npm packages` workflow and tags matching
+`codeblocks/v<package-version>`. Its separate artifact-install step downloads and
+verifies the newest `clangd-wasm/*` release before either distribution is built.
+The packages are then published using npm trusted publishing and provenance.
+>>>>>>> b363f44 (add missing changes)
 
 Create a deployable archive with:
 
