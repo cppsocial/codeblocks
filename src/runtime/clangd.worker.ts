@@ -9,13 +9,16 @@ import {
 import { remoteModuleBootstrap } from "./worker-bootstrap";
 
 declare const self: DedicatedWorkerGlobalScope;
+declare const __CLANGD_WASM_BASE__: string;
 
 type ClangdModule = {
   FS: { writeFile(path: string, contents: string): void };
   callMain(args: string[]): void;
 };
 
-type ClangdFactory = (options: Record<string, unknown>) => Promise<ClangdModule>;
+type ClangdFactory = (
+  options: Record<string, unknown>,
+) => Promise<ClangdModule>;
 
 async function download(url: URL): Promise<Uint8Array> {
   const response = await fetch(url);
@@ -23,7 +26,8 @@ async function download(url: URL): Promise<Uint8Array> {
     throw new Error(`Unable to download clangd.wasm (${response.status})`);
   }
 
-  const headerSize = Number(response.headers.get("content-length")) || undefined;
+  const headerSize =
+    Number(response.headers.get("content-length")) || undefined;
   const chunks: Uint8Array[] = [];
   let loaded = 0;
   const reader = response.body.getReader();
@@ -49,8 +53,11 @@ async function download(url: URL): Promise<Uint8Array> {
 async function start(): Promise<void> {
   // In production this worker is emitted into assets/, beside the runtime's
   // other chunks. The manually installed Emscripten files live in wasm/.
-  const clangdJsUrl = new URL("../wasm/clangd.js", import.meta.url);
-  const clangdWasmUrl = new URL("../wasm/clangd.wasm", import.meta.url);
+  const wasmBase = __CLANGD_WASM_BASE__
+    ? new URL(__CLANGD_WASM_BASE__)
+    : new URL("../wasm/", import.meta.url);
+  const clangdJsUrl = new URL("clangd.js", wasmBase);
+  const clangdWasmUrl = new URL("clangd.wasm", wasmBase);
 
   const modulePromise = import(/* @vite-ignore */ clangdJsUrl.href) as Promise<{
     default: ClangdFactory;
@@ -94,8 +101,7 @@ async function start(): Promise<void> {
     // Emscripten uses this same module as its pthread entry point. Supplying a
     // Blob makes every pthread worker same-origin even when clangd.js is remote.
     mainScriptUrlOrBlob: remoteModuleBootstrap(clangdJsUrl.href),
-    locateFile: (path: string) =>
-      new URL(path, new URL("../wasm/", import.meta.url)).href,
+    locateFile: (path: string) => new URL(path, wasmBase).href,
     stdinReady,
     stdin,
     stdout,
@@ -122,8 +128,10 @@ async function start(): Promise<void> {
   const reader = new BrowserMessageReader(self);
   writer = new BrowserMessageWriter(self);
   reader.listen((data) => {
-    const body = JSON.stringify(data).replace(/[\u007F-\uFFFF]/g, (character) =>
-      `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`,
+    const body = JSON.stringify(data).replace(
+      /[\u007F-\uFFFF]/g,
+      (character) =>
+        `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`,
     );
     stdinChunks.push(`Content-Length: ${body.length}\r\n`, "\r\n", body);
     resolveStdinReady();

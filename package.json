@@ -1,13 +1,20 @@
 {
-  "name": "clangd-in-browser",
+  "name": "codeblocks",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Editable C++ code blocks backed by Monaco and clangd WebAssembly",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cppsocial/clangd-web.git"
+  },
   "type": "module",
   "scripts": {
     "clean": "vite-node --config ./scripts/vite.node.ts ./scripts/clean.ts",
     "dev": "pnpm build",
     "watch": "tsc -w",
-    "build": "pnpm run clean && tsc && vite build && node scripts/copy-runtime-assets.mjs",
+    "build": "pnpm run clean && tsc && vite build && tsc -p tsconfig.types.json && node scripts/copy-runtime-assets.mjs",
+    "package:npm": "node scripts/prepare-npm-package.mjs dist packages/codeblocks codeblocks",
     "pack:runtime": "pnpm build && bash scripts/package-runtime.sh",
     "release:wasm": "bash scripts/release-clangd-wasm.sh",
     "demo:origins": "node scripts/serve-test.mjs",

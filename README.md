@@ -11,10 +11,7 @@ Copy the complete contents of `dist/` to one public directory, then include one 
 <script src="./codeblocks.js"></script>
 
 <codeblock compiler="gsnapshot" args="-std=c++26 -freflection">
-#include &lt;print&gt;
-int main() {
-    std::println("foo {} bar", 42);
-}
+  #include &lt;print&gt; int main() { std::println("foo {} bar", 42); }
 </codeblock>
 ```
 
@@ -26,12 +23,8 @@ A block can also contain multiple tabbed sources:
 
 ```html
 <codeblock compiler="clang2110" args="-std=c++23" height="360px">
-  <codeblock-tab name="first.cpp">
-int main() { return 1; }
-  </codeblock-tab>
-  <codeblock-tab name="second.cpp">
-int main() { return 2; }
-  </codeblock-tab>
+  <codeblock-tab name="first.cpp"> int main() { return 1; } </codeblock-tab>
+  <codeblock-tab name="second.cpp"> int main() { return 2; } </codeblock-tab>
 </codeblock>
 ```
 
@@ -66,7 +59,7 @@ Supported attributes are:
     },
     styles: {
       "editor-height": "360px",
-      "accent": "#7c3aed",
+      accent: "#7c3aed",
     },
   });
 
@@ -175,6 +168,29 @@ Run the browser suite in another terminal:
 pnpm exec playwright install chromium
 pnpm test:browser
 ```
+
+## npm packages
+
+The release workflow publishes two packages from the same source and version:
+
+- `codeblocks` is self-contained and includes the clangd JavaScript and
+  WebAssembly files from `public/wasm/`.
+- `codeblocks-remote` omits those large files and builds the worker to load
+  them from `https://clangd.cpp.social/wasm/`.
+
+Both packages contain the classic loader as the `./loader` export, the stylesheet
+as `./styles.css`, the typed ES module API at the package root, and every emitted
+chunk and worker required by that build.
+
+Local packaging never downloads artifacts. It uses the files already present in
+`public/wasm/`, so a manual package is built from exactly the current checkout:
+
+```bash
+pnpm build
+pnpm package:npm
+npm pack ./packages/codeblocks
+```
+
 
 Create a deployable archive with:
 

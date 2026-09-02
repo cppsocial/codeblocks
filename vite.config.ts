@@ -3,6 +3,9 @@ import importMetaUrlPlugin from "@codingame/esbuild-import-meta-url-plugin";
 
 export default defineConfig({
   base: "./",
+  define: {
+    __CLANGD_WASM_BASE__: JSON.stringify(process.env.CLANGD_WASM_BASE ?? ""),
+  },
   publicDir: false,
   build: {
     target: "es2022",

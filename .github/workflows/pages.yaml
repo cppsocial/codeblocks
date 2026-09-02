@@ -24,42 +24,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          release_prefix="clangd-wasm/"
-          release_tag=$(
-            gh api --paginate "repos/${RELEASE_REPOSITORY}/releases?per_page=100" |
-              jq -sr --arg prefix "$release_prefix" '
-                add
-                | map(select(
-                    (.draft | not)
-                    and (.tag_name | startswith($prefix))
-                  ))
-                | sort_by(.published_at)
-                | last
-                | .tag_name // empty
-              '
-          )
-          if [[ -z "$release_tag" ]]; then
-            echo "No published clangd wasm release found with prefix ${release_prefix}" >&2
-            echo "Run scripts/release-clangd-wasm.sh locally first." >&2
-            exit 1
-          fi
-          artifact_dir=$(mktemp -d)
-          trap 'rm -rf "$artifact_dir"' EXIT
-          echo "Using ${release_tag}"
-          gh release download "$release_tag" \
-            --repo "$RELEASE_REPOSITORY" \
-            --pattern clangd.js \
-            --pattern clangd.wasm \
-            --pattern SHA256SUMS \
-            --dir "$artifact_dir"
-          (
-            cd "$artifact_dir"
-            sha256sum -c SHA256SUMS
-          )
-          install -m 0644 "$artifact_dir/clangd.js" public/wasm/clangd.js
-          install -m 0644 "$artifact_dir/clangd.wasm" public/wasm/clangd.wasm
+        run: scripts/install-latest-clangd-release
       - run: pnpm build
       - uses: actions/upload-pages-artifact@v3
         with:

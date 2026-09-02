@@ -6,6 +6,21 @@ import "./codeblocks.css";
 
 export type CodeBlockTheme = "auto" | "light" | "dark";
 
+export type CodeBlocksStatus =
+  | { type: "monaco-loading" }
+  | { type: "monaco-ready" }
+  | { type: "clangd-downloading"; loaded: number; total?: number }
+  | { type: "clangd-starting" }
+  | { type: "clangd-loaded" }
+  | { type: "clangd-ready" }
+  | { type: "clangd-error"; error: Error };
+
+export interface CodeBlocksEditor {
+  focus(): void;
+  getValue(): string;
+  setValue(value: string): void;
+}
+
 export interface CompilerExplorerFilters {
   binary: boolean;
   binaryObject: boolean;
@@ -40,9 +55,9 @@ export interface CodeBlocksConfiguration {
   compilerExplorer?: CompilerExplorerConfiguration;
   /** @deprecated Use compilerExplorer.baseUrl. */
   compilerExplorerUrl?: string;
-  editorOptions?: MonacoEditor.IStandaloneEditorConstructionOptions;
+  editorOptions?: Record<string, unknown>;
   styles?: Record<string, string>;
-  onStatus?: (status: EditorStatus) => void;
+  onStatus?: (status: CodeBlocksStatus) => void;
 }
 
 export interface CreateCodeBlockOptions extends CodeBlocksConfiguration {
@@ -61,8 +76,8 @@ export interface CodeBlock {
   setTheme(theme: CodeBlockTheme): Promise<void>;
   dispose(): void;
   onDidChange(callback: (value: string) => void): () => void;
-  editorReady: Promise<CppEditor>;
-  monacoReady: Promise<MonacoEditor.IStandaloneCodeEditor>;
+  editorReady: Promise<CodeBlocksEditor>;
+  monacoReady: Promise<unknown>;
   clangdReady: Promise<void>;
 }
 
@@ -88,7 +103,10 @@ export function startCodeBlocks(root: ParentNode = document): void {
       }
     }
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
 }
 
 export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
@@ -158,17 +176,29 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   outputDrawer.append(outputHeader, output);
 
   root.classList.add("codeblocks-root");
-  root.replaceChildren(...(tabs.length > 1 ? [tabBar] : []), editorShell, toolbar, outputDrawer);
+  root.replaceChildren(
+    ...(tabs.length > 1 ? [tabBar] : []),
+    editorShell,
+    toolbar,
+    outputDrawer,
+  );
   const requestedWidth = root.getAttribute("width");
   const requestedHeight = root.getAttribute("height");
   const requestedMinHeight = root.getAttribute("min-height");
   if (requestedWidth) root.style.width = requestedWidth;
-  if (requestedHeight) root.style.setProperty("--codeblocks-editor-height", requestedHeight);
+  if (requestedHeight)
+    root.style.setProperty("--codeblocks-editor-height", requestedHeight);
   if (requestedMinHeight) {
-    root.style.setProperty("--codeblocks-editor-min-height", requestedMinHeight);
+    root.style.setProperty(
+      "--codeblocks-editor-min-height",
+      requestedMinHeight,
+    );
   }
   for (const [name, value] of Object.entries(options.styles ?? {})) {
-    root.style.setProperty(name.startsWith("--") ? name : `--codeblocks-${name}`, value);
+    root.style.setProperty(
+      name.startsWith("--") ? name : `--codeblocks-${name}`,
+      value,
+    );
   }
 
   let themeMode = options.theme ?? "auto";
@@ -181,7 +211,8 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
     value: initialValue,
   });
   let editor: CppEditor | undefined;
-  let activeEditor: Pick<CppEditor, "getValue" | "setValue" | "focus"> = fallback;
+  let activeEditor: Pick<CppEditor, "getValue" | "setValue" | "focus"> =
+    fallback;
   let disposed = false;
   let lastLoggedDownload = -1;
   const changeListeners = new Set<(value: string) => void>();
@@ -225,7 +256,8 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
       element: monacoHost,
       value: fallback?.getValue() ?? initialValue,
       theme: resolvedTheme,
-      editorOptions: options.editorOptions,
+      editorOptions:
+        options.editorOptions as MonacoEditor.IStandaloneEditorConstructionOptions,
       onStatus: reportStatus,
     });
     if (disposed) {
@@ -283,14 +315,18 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
       const stderr = joinLines(result.stderr);
       output.replaceChildren();
       if (result.didExecute) {
-        if (!stdout && !stderr) output.textContent = "Program completed with no output.";
+        if (!stdout && !stderr)
+          output.textContent = "Program completed with no output.";
         else {
           appendAnsi(output, stdout);
           if (stdout && stderr) output.append("\n");
           appendAnsi(output, stderr, { className: "codeblocks-stderr" });
         }
       } else {
-        appendAnsi(output, diagnostics || "Compilation failed without diagnostics.");
+        appendAnsi(
+          output,
+          diagnostics || "Compilation failed without diagnostics.",
+        );
       }
     } catch (error) {
       output.textContent = `Run failed: ${errorMessage(error)}`;
@@ -314,7 +350,10 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
     } else {
       monacoHost.hidden = true;
       delete monacoHost.dataset.ready;
-      fallback = createCppFallbackEditor({ element: fallbackHost, value: editor.getValue() });
+      fallback = createCppFallbackEditor({
+        element: fallbackHost,
+        value: editor.getValue(),
+      });
       editorShell.prepend(fallbackHost);
       activeEditor = fallback;
       subscribeToActive(fallback);
@@ -336,7 +375,8 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   }
 
   function updateThemeButton(): void {
-    themeToggle.textContent = resolvedTheme === "dark" ? "Use light theme" : "Use dark theme";
+    themeToggle.textContent =
+      resolvedTheme === "dark" ? "Use light theme" : "Use dark theme";
   }
 
   function removeFallback(): void {
@@ -369,9 +409,10 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
   }
 
   function selectTab(tab: string | number): void {
-    const index = typeof tab === "number"
-      ? tab
-      : tabs.findIndex((candidate) => candidate.name === tab);
+    const index =
+      typeof tab === "number"
+        ? tab
+        : tabs.findIndex((candidate) => candidate.name === tab);
     if (index < 0 || index >= tabs.length || index === activeTab) return;
     tabs[activeTab].value = activeEditor.getValue();
     activeTab = index;
@@ -390,10 +431,11 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
       tabs[activeTab].value = value;
       activeEditor.setValue(value);
     },
-    getTabs: () => tabs.map((tab, index) => ({
-      name: tab.name,
-      value: index === activeTab ? activeEditor.getValue() : tab.value,
-    })),
+    getTabs: () =>
+      tabs.map((tab, index) => ({
+        name: tab.name,
+        value: index === activeTab ? activeEditor.getValue() : tab.value,
+      })),
     selectTab,
     getCompilerExplorerUrl,
     focus: () => activeEditor.focus(),
@@ -404,7 +446,10 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
       disposed = true;
       runButton.removeEventListener("click", run);
       compilerLink.removeEventListener("click", updateCompilerExplorerLink);
-      compilerLink.removeEventListener("pointerdown", updateCompilerExplorerLink);
+      compilerLink.removeEventListener(
+        "pointerdown",
+        updateCompilerExplorerLink,
+      );
       compilerLink.removeEventListener("focus", updateCompilerExplorerLink);
       editorToggle.removeEventListener("click", toggleEditor);
       themeToggle.removeEventListener("click", toggleTheme);
@@ -434,8 +479,13 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
 
 function upgradeWithin(root: ParentNode): void {
   const elements: HTMLElement[] = [];
-  if (root instanceof HTMLElement && root.localName === "codeblock") elements.push(root);
-  elements.push(...root.querySelectorAll<HTMLElement>("codeblock:not([data-codeblocks-upgraded])"));
+  if (root instanceof HTMLElement && root.localName === "codeblock")
+    elements.push(root);
+  elements.push(
+    ...root.querySelectorAll<HTMLElement>(
+      "codeblock:not([data-codeblocks-upgraded])",
+    ),
+  );
   for (const element of elements) {
     if (element.dataset.codeblocksUpgraded !== undefined) continue;
     element.dataset.codeblocksUpgraded = "";
@@ -443,7 +493,8 @@ function upgradeWithin(root: ParentNode): void {
       ...configuration,
       element,
       theme: attributeTheme(element) ?? configuration.theme,
-      showDebugControls: element.hasAttribute("debug") || configuration.showDebugControls,
+      showDebugControls:
+        element.hasAttribute("debug") || configuration.showDebugControls,
       compiler: element.getAttribute("compiler") ?? configuration.compiler,
       args: element.getAttribute("args") ?? configuration.args,
       compilerExplorer: compilerExplorerAttributes(
@@ -457,29 +508,42 @@ function upgradeWithin(root: ParentNode): void {
 
 function sourceFromElement(element: HTMLElement): string {
   const source = element.textContent ?? "";
-  return source.startsWith("\n") ? source.slice(1).replace(/[ \t]*\n?$/, "") : source;
+  return source.startsWith("\n")
+    ? source.slice(1).replace(/[ \t]*\n?$/, "")
+    : source;
 }
 
 function readTabs(
   element: HTMLElement,
   explicitValue: string | undefined,
 ): Array<{ name: string; value: string }> {
-  if (explicitValue !== undefined) return [{ name: "main.cpp", value: explicitValue }];
+  if (explicitValue !== undefined)
+    return [{ name: "main.cpp", value: explicitValue }];
   const tabElements = Array.from(
     element.querySelectorAll<HTMLElement>(":scope > codeblock-tab"),
   );
   if (!tabElements.length) {
-    return [{ name: element.getAttribute("filename") ?? "main.cpp", value: sourceFromElement(element) }];
+    return [
+      {
+        name: element.getAttribute("filename") ?? "main.cpp",
+        value: sourceFromElement(element),
+      },
+    ];
   }
   return tabElements.map((tab, index) => ({
-    name: tab.getAttribute("name") ?? tab.getAttribute("filename") ?? `File ${index + 1}`,
+    name:
+      tab.getAttribute("name") ??
+      tab.getAttribute("filename") ??
+      `File ${index + 1}`,
     value: sourceFromElement(tab),
   }));
 }
 
 function attributeTheme(element: HTMLElement): CodeBlockTheme | undefined {
   const value = element.getAttribute("theme");
-  return value === "auto" || value === "light" || value === "dark" ? value : undefined;
+  return value === "auto" || value === "light" || value === "dark"
+    ? value
+    : undefined;
 }
 
 function compilerExplorerAttributes(
@@ -494,7 +558,14 @@ function compilerExplorerAttributes(
     element,
     "ce-filters",
   );
-  if (!configured && !baseUrl && !language && !compiler && !options && !filters) {
+  if (
+    !configured &&
+    !baseUrl &&
+    !language &&
+    !compiler &&
+    !options &&
+    !filters
+  ) {
     return undefined;
   }
   return {
@@ -578,7 +649,10 @@ function logStatus(event: EditorStatus): void {
   } else if (event.type === "clangd-ready") {
     console.info("[CodeBlocks] clangd activated");
   } else if (event.type === "clangd-error") {
-    console.error(`[CodeBlocks] clangd error: ${event.error.message}`, event.error);
+    console.error(
+      `[CodeBlocks] clangd error: ${event.error.message}`,
+      event.error,
+    );
   }
 }
 
@@ -607,35 +681,42 @@ function createCompilerExplorerUrl(
 ): string {
   const explorer = options.compilerExplorer ?? {};
   const compiler = explorer.compiler ?? options.compiler ?? "clang2110";
-  const compilerOptions = explorer.options ?? options.args ??
+  const compilerOptions =
+    explorer.options ??
+    options.args ??
     "-std=c++2c -Wall -Wextra -pedantic-errors";
   const state = {
-    sessions: [{
-      id: 1,
-      language: explorer.language ?? "c++",
-      source,
-      filename,
-      compilers: [{
-        id: compiler,
-        options: compilerOptions,
-        filters: {
-          ...DEFAULT_COMPILER_EXPLORER_FILTERS,
-          ...explorer.filters,
-        },
-        libs: explorer.libs ?? [],
-        specialoutputs: explorer.specialoutputs ?? [],
-        tools: explorer.tools ?? [],
-        overrides: explorer.overrides ?? [],
-      }],
-      executors: [],
-    }],
+    sessions: [
+      {
+        id: 1,
+        language: explorer.language ?? "c++",
+        source,
+        filename,
+        compilers: [
+          {
+            id: compiler,
+            options: compilerOptions,
+            filters: {
+              ...DEFAULT_COMPILER_EXPLORER_FILTERS,
+              ...explorer.filters,
+            },
+            libs: explorer.libs ?? [],
+            specialoutputs: explorer.specialoutputs ?? [],
+            tools: explorer.tools ?? [],
+            overrides: explorer.overrides ?? [],
+          },
+        ],
+        executors: [],
+      },
+    ],
     trees: [],
   };
   const baseUrl = new URL(
     explorer.baseUrl ?? options.compilerExplorerUrl ?? "https://godbolt.org/",
   );
   if (!baseUrl.pathname.endsWith("/")) baseUrl.pathname += "/";
-  return new URL(`clientstate/${base64Url(JSON.stringify(state))}`, baseUrl).href;
+  return new URL(`clientstate/${base64Url(JSON.stringify(state))}`, baseUrl)
+    .href;
 }
 
 function base64Url(value: string): string {
@@ -650,7 +731,9 @@ function base64Url(value: string): string {
     .replace(/=+$/, "");
 }
 
-interface CompilerLine { text: string }
+interface CompilerLine {
+  text: string;
+}
 interface CompilerResult {
   didExecute: boolean;
   stdout?: CompilerLine[];
@@ -671,7 +754,10 @@ async function executeCode(
     `https://godbolt.org/api/compiler/${encodeURIComponent(compiler)}/compile`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
       body: JSON.stringify({
         source,
         compiler,
@@ -685,6 +771,7 @@ async function executeCode(
       }),
     },
   );
-  if (!response.ok) throw new Error(`Compiler service returned ${response.status}`);
+  if (!response.ok)
+    throw new Error(`Compiler service returned ${response.status}`);
   return response.json() as Promise<CompilerResult>;
 }
