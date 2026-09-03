@@ -151,7 +151,9 @@ async function start(): Promise<void> {
     `${WORKSPACE_PATH}/.clangd`,
     JSON.stringify({ CompileFlags: { Add: flags } }),
   );
-  clangd.callMain([]);
+  // One clangd process serves every editor model, so a single asynchronous
+  // worker avoids scaling its internal thread demand with the host CPU count.
+  clangd.callMain(["-j=1"]);
 
   const reader = new BrowserMessageReader(self);
   writer = new BrowserMessageWriter(self);
