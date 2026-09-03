@@ -153,7 +153,8 @@ async function start(): Promise<void> {
   );
   // One clangd process serves every editor model, so a single asynchronous
   // worker avoids scaling its internal thread demand with the host CPU count.
-  clangd.callMain(["-j=1"]);
+  // The in-memory workspace does not benefit from a persistent background index.
+  clangd.callMain(["-j=1", "--background-index=0"]);
 
   const reader = new BrowserMessageReader(self);
   writer = new BrowserMessageWriter(self);

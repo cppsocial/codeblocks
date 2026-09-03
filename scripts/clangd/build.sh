@@ -72,25 +72,68 @@ common_cmake_args=(
     -DLLVM_DEFAULT_TARGET_TRIPLE=wasm32-wasi \
     -DLLVM_TARGETS_TO_BUILD=WebAssembly \
     -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" \
+    \
     -DLLVM_TABLEGEN="$PWD/build-native/bin/llvm-tblgen" \
     -DCLANG_TABLEGEN="$PWD/build-native/bin/clang-tblgen" \
+    \
     -DLLVM_BUILD_STATIC=ON \
+    \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DLLVM_BUILD_LLVM_DYLIB=OFF \
+    -DLLVM_LINK_LLVM_DYLIB=OFF \
+    -DCLANG_LINK_CLANG_DYLIB=OFF \
+    \
+    -DLLVM_ENABLE_LTO=Full \
+    \
     -DLLVM_INCLUDE_EXAMPLES=OFF \
     -DLLVM_INCLUDE_TESTS=OFF \
+    -DLLVM_INCLUDE_BENCHMARKS=OFF \
+    -DLLVM_INCLUDE_DOCS=OFF \
+    -DLLVM_ENABLE_BINDINGS=OFF \
+    \
+    -DLLVM_BUILD_TOOLS=OFF \
+    -DCLANG_BUILD_TOOLS=OFF \
+    \
+    -DLLVM_ENABLE_ASSERTIONS=OFF \
+    -DLLVM_ENABLE_EH=OFF \
+    -DLLVM_ENABLE_RTTI=OFF \
     -DLLVM_ENABLE_BACKTRACES=OFF \
     -DLLVM_ENABLE_UNWIND_TABLES=OFF \
     -DLLVM_ENABLE_CRASH_OVERRIDES=OFF \
-    -DCLANG_ENABLE_STATIC_ANALYZER=OFF \
     -DLLVM_ENABLE_TERMINFO=OFF \
     -DLLVM_ENABLE_PIC=OFF \
-    -DLLVM_ENABLE_ZLIB=OFF
-    -DCLANG_ENABLE_ARCMT=OFF
+    -DLLVM_ENABLE_DUMP=OFF \
+    -DLLVM_ENABLE_TELEMETRY=OFF \
+    \
+    -DLLVM_ENABLE_ZLIB=OFF \
+    -DLLVM_ENABLE_ZSTD=OFF \
+    -DLLVM_ENABLE_LIBXML2=OFF \
+    -DCLANG_ENABLE_LIBXML2=OFF \
+    -DLLVM_ENABLE_LIBEDIT=OFF \
+    -DLLVM_ENABLE_LIBPFM=OFF \
+    -DLLVM_ENABLE_CURL=OFF \
+    -DLLVM_ENABLE_FFI=OFF \
+    -DLLVM_ENABLE_HTTPLIB=OFF \
+    \
+    -DCLANG_ENABLE_STATIC_ANALYZER=OFF \
+    -DCLANG_ENABLE_OBJC_REWRITER=OFF \
+    -DCLANG_PLUGIN_SUPPORT=OFF \
+    \
+    -DCLANGD_ENABLE_REMOTE=OFF \
+    -DCLANGD_BUILD_DEXP=OFF \
+    -DCLANGD_TIDY_CHECKS=OFF \
+    -DCLANG_TIDY_ENABLE_STATIC_ANALYZER=OFF \
+    -DCLANG_TIDY_ENABLE_QUERY_BASED_CUSTOM_CHECKS=OFF \
+    -DCLANGD_DECISION_FOREST=OFF \
+    -DCLANGD_MALLOC_TRIM=OFF \
+    \
+    -DCLANG_TOOLS_EXTRA_INCLUDE_DOCS=OFF
 )
 
 configure_clangd() {
     local linker_flags=$1
     emcmake cmake "${common_cmake_args[@]}" \
-      -DCMAKE_CXX_FLAGS="-pthread -Dwait4=__syscall_wait4" \
+      -DCMAKE_CXX_FLAGS="-pthread -Dwait4=__syscall_wait4 -Os -flto=full -fvirtual-function-elimination" \
       -DCMAKE_EXE_LINKER_FLAGS="$linker_flags"
 }
 
@@ -103,7 +146,7 @@ wasi_include="$CLANGD_BUILD_ROOT/wasi-sysroot-$WASI_SDK_VERSION/include"
 cp -R "build/lib/clang/$LLVM_MAJOR/include/." "$wasi_include/"
 
 ## Re-link the production build with the sysroot embedded.
-configure_clangd "-pthread -s ENVIRONMENT=worker -s NO_INVOKE_RUN -s EXIT_RUNTIME -s INITIAL_MEMORY=256MB -s ALLOW_MEMORY_GROWTH -s MAXIMUM_MEMORY=2GB -s STACK_SIZE=256kB -s EXPORTED_RUNTIME_METHODS=FS,callMain -s MODULARIZE -s EXPORT_ES6 -s WASM_BIGINT -s ASSERTIONS -s ASYNCIFY -s PTHREAD_POOL_SIZE=8 --embed-file=$wasi_include@/usr/include"
+configure_clangd "-pthread -s ENVIRONMENT=worker -s NO_INVOKE_RUN -s EXIT_RUNTIME -s INITIAL_MEMORY=256MB -s ALLOW_MEMORY_GROWTH -s MAXIMUM_MEMORY=2GB -s STACK_SIZE=256kB -s EXPORTED_RUNTIME_METHODS=FS,callMain -s MODULARIZE -s EXPORT_ES6 -s WASM_BIGINT -s ASSERTIONS -s ASYNCIFY -s PTHREAD_POOL_SIZE='Math.max(navigator.hardwareConcurrency, 8)' --embed-file=$wasi_include@/usr/include"
 cmake --build build --target clangd
 
 mkdir -p "$clangd_wasm_dir"

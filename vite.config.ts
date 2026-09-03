@@ -1,12 +1,23 @@
 import { defineConfig } from "vite";
 import importMetaUrlPlugin from "@codingame/esbuild-import-meta-url-plugin";
 
+const crossOriginIsolationHeaders = {
+  "Cross-Origin-Embedder-Policy": "require-corp",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+
 export default defineConfig({
   base: "./",
   define: {
     __CLANGD_WASM_BASE__: JSON.stringify(process.env.CLANGD_WASM_BASE ?? ""),
   },
   publicDir: false,
+  server: {
+    headers: crossOriginIsolationHeaders,
+  },
+  preview: {
+    headers: crossOriginIsolationHeaders,
+  },
   build: {
     target: "es2022",
     cssCodeSplit: false,
