@@ -55,14 +55,40 @@
           await navigator.serviceWorker.register(workerUrl, { scope: "./" });
           await navigator.serviceWorker.ready;
           log("Isolation service worker activated");
-          if (!globalThis.crossOriginIsolated) {
+          var reloadKey = "codeblocks.isolation-reload-attempted";
+          var alreadyReloaded = Boolean(
+            navigator.serviceWorker.controller ||
+            (history.state && history.state[reloadKey]),
+          );
+          try {
+            alreadyReloaded =
+              alreadyReloaded || sessionStorage.getItem(reloadKey) === "true";
+          } catch (_) {}
+          if (!globalThis.crossOriginIsolated && !alreadyReloaded) {
             log("Reloading once to enable cross-origin isolation");
+            try {
+              var reloadState = Object.assign({}, history.state);
+              reloadState[reloadKey] = true;
+              history.replaceState(reloadState, "");
+            } catch (_) {}
+            try {
+              sessionStorage.setItem(reloadKey, "true");
+            } catch (_) {}
             location.reload();
             await new Promise(function () {});
+          } else if (!globalThis.crossOriginIsolated) {
+            fail(
+              "Cross-origin isolation was not enabled after reloading; continuing without clangd",
+            );
           }
         }
       }
 
+      if (globalThis.crossOriginIsolated) {
+        try {
+          sessionStorage.removeItem("codeblocks.isolation-reload-attempted");
+        } catch (_) {}
+      }
       log("Cross-origin isolation: " + globalThis.crossOriginIsolated);
       loadedModule = await modulePromise;
       log("Code block module loaded");

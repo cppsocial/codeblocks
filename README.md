@@ -184,7 +184,10 @@ Blocks outside an 800px viewport margin keep the simple editor until
 they approach the viewport. Set `deferMonaco: false` or add `eager` when an
 off-screen integration must initialize immediately. Simultaneously visible
 blocks need separate Monaco renderers, but they still share the expensive VS
-Code services and clangd process.
+Code services and clangd process. If Monaco cannot start, the block remains a
+functional simple editor. Failed or interrupted Monaco startup is not retried
+in the same tab session; clangd is disabled after two failed or interrupted
+startup attempts.
 
 Styling uses CSS custom properties. Common properties include:
 
@@ -234,7 +237,9 @@ The reusable loader does not register a service worker by default. Hosts such as
 ></script>
 ```
 
-That opt-in registers a host-owned service worker and reloads once. Do not use the attribute when the server already sends the headers.
+That opt-in registers a host-owned service worker and reloads at most once. If
+isolation is still unavailable, the page continues without clangd. Do not use
+the attribute when the server already sends the headers.
 
 WebAssembly threads, service workers, and cross-origin isolation require a secure context. Enable "Enforce HTTPS" for a GitHub Pages custom domain. When the isolation helper is enabled, the loader also redirects non-local HTTP pages to the same HTTPS URL as a fallback. The included `clangd.cpp.social` example redirects before loading its external CSS or JavaScript.
 

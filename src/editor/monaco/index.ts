@@ -19,6 +19,7 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import { FILE_PATH, LANGUAGE_ID, WORKSPACE_PATH } from "../../clangd/config";
 import { EditorStatus, startClangd, StatusReporter } from "../../clangd/client";
 import { createRemoteModuleWorker } from "../../clangd/worker-bootstrap";
+import { beginStartupAttempt } from "../../startup-attempt";
 import "./runtime.css";
 
 export type { EditorStatus } from "../../clangd/client";
@@ -265,20 +266,27 @@ async function initializeSharedRuntime(
     reporters.forEach((reporter) => reporter(status));
   };
   let clangdHandle: ReturnType<typeof startClangd> | undefined;
-  let rejectIsolation: ((error: Error) => void) | undefined;
-  let isolatedFailure: Promise<void> | undefined;
-  if (globalThis.crossOriginIsolated) {
-    clangdHandle = startClangd(broadcast);
-  } else {
+  let unavailableFailure: Promise<void> | undefined;
+  let disabledFailure: Promise<void> | undefined;
+  const clangdAttempt = globalThis.crossOriginIsolated
+    ? beginStartupAttempt("clangd", 2)
+    : undefined;
+  if (!globalThis.crossOriginIsolated) {
     const error = new Error(
       "clangd requires cross-origin isolation because its WebAssembly build uses SharedArrayBuffer/pthreads.",
     );
     broadcast({ type: "clangd-error", error });
-    isolatedFailure = new Promise<void>(
-      (_, reject) => (rejectIsolation = reject),
+    unavailableFailure = Promise.reject(error);
+    void unavailableFailure.catch(() => {});
+  } else if (clangdAttempt!.allowed) {
+    clangdHandle = startClangd(broadcast);
+  } else {
+    const error = new Error(
+      "clangd was disabled after repeated startup failures in this tab",
     );
-    void isolatedFailure.catch(() => {});
-    rejectIsolation!(error);
+    broadcast({ type: "clangd-error", error });
+    disabledFailure = Promise.reject(error);
+    void disabledFailure.catch(() => {});
   }
 
   const staging = createStaging(options.element, options.theme ?? "dark");
@@ -382,6 +390,7 @@ async function initializeSharedRuntime(
     ? clangdHandle.ready
         .then(async () => {
           await wrapper.getLanguageClientWrapper()?.start();
+          clangdAttempt?.succeeded();
           broadcast({ type: "clangd-ready" });
         })
         .catch((value: unknown) => {
@@ -390,7 +399,7 @@ async function initializeSharedRuntime(
           broadcast({ type: "clangd-error", error });
           throw error;
         })
-    : isolatedFailure!;
+    : (unavailableFailure ?? disabledFailure)!;
   void runtime.clangdReady.catch(() => {});
   return runtime;
 }

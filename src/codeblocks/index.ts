@@ -32,6 +32,7 @@ import {
 } from "./element-options";
 import { createCodeBlockView } from "./view";
 import { tokenizeAssembly } from "./assembly";
+import { beginStartupAttempt, type StartupAttempt } from "../startup-attempt";
 import {
   appendTranslationUnits,
   fetchSource,
@@ -57,6 +58,8 @@ export {
 const instances = new WeakMap<HTMLElement, CodeBlock>();
 let configuration: CodeBlocksConfiguration = {};
 let observer: MutationObserver | undefined;
+let monacoStartupAttempt: StartupAttempt | undefined;
+let monacoStartupFailed = false;
 
 export function configureCodeBlocks(options: CodeBlocksConfiguration): void {
   configuration = { ...configuration, ...options };
@@ -308,24 +311,69 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
       fallback?.setValue(`Unable to load source: ${errorMessage(error)}`);
   });
 
-  const editorReady: Promise<CppEditor | SimpleEditor> = simple
-    ? Promise.resolve(fallback)
-    : upgradeEditor();
+  const monacoEditorReady = simple ? undefined : upgradeEditor();
+  const editorReady: Promise<CppEditor | SimpleEditor> = monacoEditorReady
+    ? monacoEditorReady.catch(fallBackFromMonaco)
+    : Promise.resolve(fallback);
   const monacoReady: Promise<unknown> = simple
     ? Promise.resolve(undefined)
-    : editorReady.then((created) => (created as CppEditor).getMonacoEditor());
+    : monacoEditorReady!.then((created) => created.getMonacoEditor());
   if (simple) resolveClangd();
-  void editorReady.catch((error: unknown) => {
+  void monacoReady.catch(() => {});
+
+  function fallBackFromMonaco(error: unknown): SimpleEditor {
+    monacoStartupFailed = true;
     if (options.showDebugControls)
-      console.error("[CodeBlocks] Editor failed", error);
+      console.error("[CodeBlocks] Monaco failed; using simple editor", error);
     rejectClangd(error);
-  });
+
+    let value = tabs[activeTab].value;
+    if (editor) {
+      try {
+        value = editor.getValue();
+      } catch {
+        // A failed Monaco instance may no longer expose its model.
+      }
+      editor.dispose();
+      editor = undefined;
+    }
+    monacoHost.hidden = true;
+    delete monacoHost.dataset.ready;
+    editorMode = "simple";
+    if (!fallback) {
+      fallback = createSimpleEditor({
+        element: fallbackHost,
+        value,
+        language: selection.language,
+        readOnly,
+        highlightedLines: displayedHighlightedLines(tabs[activeTab]),
+      });
+      editorShell.prepend(fallbackHost);
+    } else {
+      fallback.setValue(value);
+    }
+    activeEditor = fallback;
+    subscribeToActive(fallback);
+    fitFallbackToContent();
+    return fallback;
+  }
 
   async function upgradeEditor(): Promise<CppEditor> {
     if (options.deferMonaco !== false) await waitUntilNearViewport();
     if (groupedTabs) await sourceReady;
     if (disposed)
       throw new Error("Code block was disposed while the editor was loading");
+    if (monacoStartupFailed) {
+      throw new Error("Monaco was disabled after a previous startup failure");
+    }
+    const startupAttempt =
+      monacoStartupAttempt ??
+      (monacoStartupAttempt = beginStartupAttempt("monaco", 1));
+    if (!startupAttempt.allowed) {
+      throw new Error(
+        "Monaco was disabled after its previous startup was interrupted",
+      );
+    }
     const { createCppEditor } = await import("../editor/monaco");
     const inlineOptions: MonacoEditor.IStandaloneEditorConstructionOptions =
       inline
@@ -405,6 +453,9 @@ export function createCodeBlock(options: CreateCodeBlockOptions): CodeBlock {
     }
     fitEditorToContent();
     created.clangdReady.then(resolveClangd, rejectClangd);
+    startupAttempt.succeeded();
+    if (monacoStartupAttempt === startupAttempt)
+      monacoStartupAttempt = undefined;
     return created;
   }
 
