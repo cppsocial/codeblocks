@@ -27,3 +27,4 @@ playwright-report
 *.sw?
 
 .pnpm-store
+build

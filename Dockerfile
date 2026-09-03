@@ -21,9 +21,17 @@ WORKDIR /workspace
 # mount is immediately usable. A bind mount in development can reuse the
 # named node_modules volume declared by devcontainer.json.
 COPY --chown=node:node package.json pnpm-lock.yaml .npmrc ./
-RUN pnpm install --frozen-lockfile --prefer-offline
+# The package's prepare lifecycle needs scripts/, src/, and public/wasm, which
+# are copied in the next layer. Install dependencies here without lifecycle
+# scripts so this cacheable layer does not try to build an incomplete tree.
+RUN pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
 
 COPY --chown=node:node . .
+
+# Run the dependency lifecycle skipped above, then prepare the complete source
+# tree. ensure-wasm will use the artifacts copied from public/wasm.
+RUN pnpm rebuild esbuild \
+    && pnpm run prepare
 
 ENV NODE_ENV=development
 EXPOSE 4173
