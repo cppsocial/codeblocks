@@ -34,14 +34,38 @@ self.addEventListener("message", (event) => {
   else pendingWorkspaceFiles.push(files);
 });
 
-async function download(url: URL): Promise<Uint8Array> {
+function unsignedLeb128(value: number): number[] {
+  const bytes = [];
+  do {
+    let byte = value & 0x7f;
+    value >>>= 7;
+    if (value) byte |= 0x80;
+    bytes.push(byte);
+  } while (value);
+  return bytes;
+}
+
+function emptySourceMapSection(): Uint8Array {
+  const encoder = new TextEncoder();
+  const name = encoder.encode("sourceMappingURL");
+  const url = encoder.encode(
+    'data:application/json,{"version":3,"sources":[],"names":[],"mappings":""}',
+  );
+  const contents = new Uint8Array([
+    ...unsignedLeb128(name.length),
+    ...name,
+    ...unsignedLeb128(url.length),
+    ...url,
+  ]);
+  return new Uint8Array([0, ...unsignedLeb128(contents.length), ...contents]);
+}
+
+async function download(url: URL, suffix?: Uint8Array): Promise<Uint8Array> {
   const response = await fetch(url);
   if (!response.ok || !response.body) {
     throw new Error(`Unable to download clangd.wasm (${response.status})`);
   }
 
-  const headerSize =
-    Number(response.headers.get("content-length")) || undefined;
   const chunks: Uint8Array[] = [];
   let loaded = 0;
   const reader = response.body.getReader();
@@ -51,16 +75,17 @@ async function download(url: URL): Promise<Uint8Array> {
     if (value) {
       chunks.push(value);
       loaded += value.length;
-      self.postMessage({ type: "progress", loaded, total: headerSize });
+      self.postMessage({ type: "progress", loaded });
     }
   }
 
-  const bytes = new Uint8Array(loaded);
+  const bytes = new Uint8Array(loaded + (suffix?.length ?? 0));
   let offset = 0;
   for (const chunk of chunks) {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
+  if (suffix) bytes.set(suffix, loaded);
   return bytes;
 }
 
@@ -76,7 +101,10 @@ async function start(): Promise<void> {
   const modulePromise = import(/* @vite-ignore */ clangdJsUrl.href) as Promise<{
     default: ClangdFactory;
   }>;
-  const wasmBinary = await download(clangdWasmUrl);
+  // Firefox asks every instantiated Wasm module for a source-map URL. Give it
+  // a valid, empty map instead of letting DevTools try to resolve `null` against
+  // the synthetic URL assigned to an ArrayBuffer-instantiated module.
+  const wasmBinary = await download(clangdWasmUrl, emptySourceMapSection());
   self.postMessage({ type: "starting" });
 
   const { default: Clangd } = await modulePromise;

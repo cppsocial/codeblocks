@@ -46,3 +46,12 @@ await run(
   ],
   { label: "copy-runtime-assets" },
 );
+
+await run(
+  process.execPath,
+  [
+    path.join(projectRoot, "scripts", "compress-runtime-assets.mjs"),
+    `--outdir=${outdir}`,
+  ],
+  { label: "compress-runtime-assets" },
+);

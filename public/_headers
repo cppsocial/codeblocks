@@ -4,3 +4,18 @@
 
 /wasm/*.wasm
   Content-Type: application/wasm
+
+/assets/*.js.br
+  Content-Encoding: br
+  Content-Type: text/javascript
+  Vary: Accept-Encoding
+
+/wasm/*.js.br
+  Content-Encoding: br
+  Content-Type: text/javascript
+  Vary: Accept-Encoding
+
+/wasm/*.wasm.br
+  Content-Encoding: br
+  Content-Type: application/wasm
+  Vary: Accept-Encoding

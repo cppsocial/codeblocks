@@ -245,6 +245,14 @@ WebAssembly threads, service workers, and cross-origin isolation require a secur
 
 If assets are hosted on another origin, that origin must allow CORS and send `Cross-Origin-Resource-Policy: cross-origin` or an equivalent policy accepted by the embedding page.
 
+Production builds retain every uncompressed runtime file and also create Brotli
+sidecars for everything under `wasm/` and for other JavaScript files of at least
+128 KiB. Configure the web server to serve `file.br` for a request to `file` when
+the client advertises `Accept-Encoding: br`, with the original content type,
+`Content-Encoding: br`, and `Vary: Accept-Encoding`. Vite preview does this
+automatically. The uncompressed files remain the source of truth and the fallback
+for hosts that do not support precompressed sidecars.
+
 ## Build and test
 
 Installing dependencies downloads the latest verified prebuilt clangd artifacts

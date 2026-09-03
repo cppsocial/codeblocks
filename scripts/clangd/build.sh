@@ -146,7 +146,7 @@ wasi_include="$CLANGD_BUILD_ROOT/wasi-sysroot-$WASI_SDK_VERSION/include"
 cp -R "build/lib/clang/$LLVM_MAJOR/include/." "$wasi_include/"
 
 ## Re-link the production build with the sysroot embedded.
-configure_clangd "-pthread -s ENVIRONMENT=worker -s NO_INVOKE_RUN -s EXIT_RUNTIME -s INITIAL_MEMORY=256MB -s ALLOW_MEMORY_GROWTH -s MAXIMUM_MEMORY=2GB -s STACK_SIZE=256kB -s EXPORTED_RUNTIME_METHODS=FS,callMain -s MODULARIZE -s EXPORT_ES6 -s WASM_BIGINT -s ASSERTIONS -s ASYNCIFY -s PTHREAD_POOL_SIZE='Math.max(navigator.hardwareConcurrency, 8)' --embed-file=$wasi_include@/usr/include"
+configure_clangd "-pthread -s ENVIRONMENT=worker -s NO_INVOKE_RUN -s EXIT_RUNTIME -s INITIAL_MEMORY=256MB -s ALLOW_MEMORY_GROWTH -s MAXIMUM_MEMORY=2GB -s STACK_SIZE=256kB -s EXPORTED_RUNTIME_METHODS=FS,callMain -s MODULARIZE -s EXPORT_ES6 -s WASM_BIGINT -s ASSERTIONS -s ASYNCIFY -s PTHREAD_POOL_SIZE='Math.max(navigator.hardwareConcurrency, 4)' --embed-file=$wasi_include@/usr/include"
 cmake --build build --target clangd
 
 mkdir -p "$clangd_wasm_dir"
