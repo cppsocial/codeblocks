@@ -47,10 +47,12 @@
             "Service workers are unavailable; clangd cannot enable cross-origin isolation",
           );
         } else {
-          var workerUrl = new URL(
-            serviceWorker || "./coi-serviceworker.js",
-            script.src,
-          );
+          // An explicitly configured worker belongs to the host page, so its
+          // relative URL follows normal HTML attribute semantics. The bundled
+          // fallback remains relative to this loader script.
+          var workerUrl = serviceWorker
+            ? new URL(serviceWorker, document.baseURI)
+            : new URL("./coi-serviceworker.js", script.src);
           log("Registering isolation service worker at " + workerUrl.href);
           await navigator.serviceWorker.register(workerUrl, { scope: "./" });
           await navigator.serviceWorker.ready;
